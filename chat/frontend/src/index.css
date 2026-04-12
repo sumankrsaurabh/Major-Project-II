@@ -1,0 +1,178 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, system-ui, sans-serif;
+  background: #f5f7fb;
+  color: #1f2937;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(2rem, 2.5vw, 3rem);
+}
+
+header p {
+  margin: 0;
+  color: #4b5563;
+}
+
+.upload-panel,
+.qa-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 24px;
+}
+
+.upload-panel input {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.upload-panel button,
+.qa-panel button {
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-weight: 600;
+}
+
+.error {
+  margin-top: 12px;
+  color: #b91c1c;
+}
+
+.results-panel {
+  display: grid;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.document-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.document-tabs button {
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  background: transparent;
+  padding: 10px 16px;
+}
+
+.document-tabs button.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+.document-summary,
+.qa-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.document-summary h2,
+.qa-panel h3 {
+  margin-top: 0;
+}
+
+.document-summary p,
+.answer-box p {
+  margin: 10px 0;
+  line-height: 1.7;
+}
+
+.image-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 16px;
+}
+
+.image-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 14px;
+  background: #f8fafc;
+}
+
+.image-card img {
+  width: 100%;
+  border-radius: 12px;
+  display: block;
+}
+
+.ocr-text {
+  margin-top: 10px;
+  background: #ffffff;
+  padding: 10px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #374151;
+  white-space: pre-wrap;
+}
+
+.graph-card {
+  margin-top: 20px;
+}
+
+.graph-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.graph-bar-item {
+  display: grid;
+  gap: 8px;
+}
+
+.bar {
+  height: 16px;
+  background: #2563eb;
+  border-radius: 9999px;
+}
+
+.qa-panel textarea {
+  width: 100%;
+  min-height: 120px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #d1d5db;
+  resize: vertical;
+}
+
+.answer-box {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
