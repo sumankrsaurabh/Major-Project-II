@@ -7,4 +7,5 @@ pytesseract>=0.3.11
 opencv-python-headless>=4.9.0.74
 nltk>=3.9.0
 scikit-learn>=1.4.0
+sentence-transformers>=2.3.0
 python-dotenv>=1.0.0

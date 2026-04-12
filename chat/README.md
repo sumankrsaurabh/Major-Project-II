@@ -6,9 +6,10 @@ A full-stack app built with FastAPI, React, and Python tools for PDF summarizati
 - Upload one or multiple PDF files at once
 - Extract text and images from PDFs
 - Generate document summaries and key insights
-- Ask document-specific questions
+- Ask document-specific questions using semantic search
 - Extract OCR text from images inside PDFs
 - Produce keyword graph data for knowledge exploration
+- See top document sections, key phrases, and evidence context
 
 ## Getting Started
 

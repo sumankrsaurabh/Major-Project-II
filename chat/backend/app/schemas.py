@@ -16,10 +16,18 @@ class GraphData(BaseModel):
     values: List[int]
 
 
+class SectionResult(BaseModel):
+    title: str
+    preview: str
+    relevance: float
+
+
 class PdfResult(BaseModel):
     name: str
     summary: str
     key_insights: List[str]
+    key_phrases: List[str]
+    sections: List[SectionResult]
     text: str
     images: List[ImageResult]
     graph_data: GraphData
@@ -37,3 +45,4 @@ class QARequest(BaseModel):
 class QAResponse(BaseModel):
     answer: str
     source: str
+    context: str

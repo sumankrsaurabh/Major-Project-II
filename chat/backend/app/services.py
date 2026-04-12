@@ -6,8 +6,10 @@ from app.utils import (
     extract_text_and_images,
     summarize_text,
     extract_key_insights,
+    extract_key_phrases,
     build_graph_data,
-    answer_question_naive,
+    build_section_summaries,
+    answer_question_semantic,
 )
 
 
@@ -19,6 +21,8 @@ async def process_pdfs(files: List[UploadFile]):
         summary = summarize_text(text)
         insights = extract_key_insights(text)
         graph_payload = build_graph_data(text)
+        key_phrases = extract_key_phrases(text)
+        sections = build_section_summaries(text)
 
         images = []
         for item in raw_images:
@@ -39,6 +43,8 @@ async def process_pdfs(files: List[UploadFile]):
                 "name": upload.filename or "uploaded.pdf",
                 "summary": summary,
                 "key_insights": insights,
+                "key_phrases": key_phrases,
+                "sections": sections,
                 "text": text,
                 "images": images,
                 "graph_data": GraphData(**graph_payload),
@@ -49,5 +55,5 @@ async def process_pdfs(files: List[UploadFile]):
 
 
 def answer_question(question: str, document_text: str):
-    answer, source = answer_question_naive(question, document_text)
-    return {"answer": answer, "source": source}
+    answer, source = answer_question_semantic(question, document_text)
+    return {"answer": answer, "source": source, "context": source}

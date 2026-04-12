@@ -7,7 +7,7 @@ from app.schemas import UploadResponse, QARequest, QAResponse
 app = FastAPI(
     title="Chat With Your PDF",
     description="Upload PDFs to summarize, ask questions, extract images, and explore knowledge with NLP and computer vision.",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
