@@ -14,7 +14,7 @@ echo Press CTRL+C to stop.
 echo.
 
 REM Use --reload with --workers 1 to avoid multiprocessing on Windows
-python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload --workers 1
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload --workers 1
 
 echo.
 echo Server stopped.

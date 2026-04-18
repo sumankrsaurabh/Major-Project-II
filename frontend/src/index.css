@@ -1,20 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+
+:root {
+  /* Material Design Dark Theme Colors */
+  --mui-background-default: #121212;
+  --mui-background-paper: #1e1e1e;
+  
+  /* MUI Primary Color (Deep Purple 200 - Classic Dark Mode Primary) */
+  --mui-primary-main: #b39ddb;
+  --mui-primary-light: #e6ceff;
+  --mui-primary-dark: #836fa9;
+  
+  /* MUI Secondary Color (Teal 200) */
+  --mui-secondary-main: #80cbc4;
+  --mui-secondary-light: #b2fef7;
+  --mui-secondary-dark: #4f9a94;
+
+  /* Semantic */
+  --mui-error-main: #f44336;
+  --mui-warning-main: #ffa726;
+  --mui-info-main: #29b6f6;
+  --mui-success-main: #66bb6a;
+
+  /* Text Colors */
+  --mui-text-primary: rgba(255, 255, 255, 0.87);
+  --mui-text-secondary: rgba(255, 255, 255, 0.60);
+  --mui-text-disabled: rgba(255, 255, 255, 0.38);
+
+  /* Borders / Dividers */
+  --mui-divider: rgba(255, 255, 255, 0.12);
+
+  /* Material Design Elevations (Shadows) */
+  --mui-shadow-0: none;
+  --mui-shadow-1: 0px 2px 1px -1px rgba(0,0,0,0.2), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 1px 3px 0px rgba(0,0,0,0.12);
+  --mui-shadow-2: 0px 3px 1px -2px rgba(0,0,0,0.2), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 1px 5px 0px rgba(0,0,0,0.12);
+  --mui-shadow-3: 0px 3px 3px -2px rgba(0,0,0,0.2), 0px 3px 4px 0px rgba(0,0,0,0.14), 0px 1px 8px 0px rgba(0,0,0,0.12);
+  --mui-shadow-4: 0px 2px 4px -1px rgba(0,0,0,0.2), 0px 4px 5px 0px rgba(0,0,0,0.14), 0px 1px 10px 0px rgba(0,0,0,0.12);
+  --mui-shadow-6: 0px 3px 5px -1px rgba(0,0,0,0.2), 0px 6px 10px 0px rgba(0,0,0,0.14), 0px 1px 18px 0px rgba(0,0,0,0.12);
+  --mui-shadow-8: 0px 5px 5px -3px rgba(0,0,0,0.2), 0px 8px 10px 1px rgba(0,0,0,0.14), 0px 3px 14px 2px rgba(0,0,0,0.12);
+
+  /* Transitions (Added bounce for animation feel) */
+  --mui-transition-standard: 300ms cubic-bezier(0.34, 1.56, 0.64, 1) 0ms;
+  --mui-transition-short: 200ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;
+
+  /* Spacing Base */
+  --mui-spacing: 8px;
+  
+  /* Modern Soft Roundness */
+  --mui-shape-borderRadius: 16px;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
 }
+
+body {
+  font-family: 'Source Sans 3', 'Helvetica', 'Arial', sans-serif;
+  background-color: var(--mui-background-default);
+  color: var(--mui-text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* MUI Paper Component Emulator */
+.mui-paper {
+  background-color: var(--mui-background-paper);
+  color: var(--mui-text-primary);
+  border-radius: var(--mui-shape-borderRadius);
+  transition: box-shadow var(--mui-transition-standard);
+  /* Default elevation 1 */
+  box-shadow: var(--mui-shadow-1);
+}
+
+.mui-paper-outlined {
+  background-color: var(--mui-background-paper);
+  color: var(--mui-text-primary);
+  border-radius: var(--mui-shape-borderRadius);
+  border: 1px solid var(--mui-divider);
+  box-shadow: var(--mui-shadow-0);
+}
+
+/* Typography Variants */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Source Sans 3', 'Helvetica', 'Arial', sans-serif;
+  font-weight: 400;
+  margin-bottom: 0.35em;
+}
+
+.mui-h4 { font-size: 2.125rem; font-weight: 400; line-height: 1.235; letter-spacing: 0.00735em; }
+.mui-h5 { font-size: 1.5rem; font-weight: 400; line-height: 1.334; letter-spacing: 0em; }
+.mui-h6 { font-size: 1.25rem; font-weight: 500; line-height: 1.6; letter-spacing: 0.0075em; }
+.mui-subtitle1 { font-size: 1rem; font-weight: 400; line-height: 1.75; letter-spacing: 0.00938em; color: var(--mui-text-secondary); }
+.mui-body1 { font-size: 1rem; font-weight: 400; line-height: 1.5; letter-spacing: 0.00938em; }
+.mui-body2 { font-size: 0.875rem; font-weight: 400; line-height: 1.43; letter-spacing: 0.01071em; color: var(--mui-text-secondary); }
+
+/* Custom Inputs standard reset */
+input, textarea, button {
+  font-family: inherit;
+  outline: none;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }

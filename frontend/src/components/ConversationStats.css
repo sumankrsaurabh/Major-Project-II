@@ -1,0 +1,38 @@
+/* Conversation Stats MUI styles */
+.mui-stats-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mui-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.mui-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border-radius: var(--mui-shape-borderRadius);
+}
+
+.mui-stat-value {
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--mui-primary-main);
+  line-height: 1.2;
+}
+
+.mui-stat-label {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.75rem;
+  color: var(--mui-text-secondary);
+  text-transform: uppercase;
+  margin-top: 4px;
+}

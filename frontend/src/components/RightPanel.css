@@ -1,0 +1,82 @@
+/* MUI Right Panel Drawer */
+.mui-right-panel {
+  width: 320px;
+  flex-shrink: 0;
+  height: 100vh;
+  box-sizing: border-box;
+  border-left: 1px solid var(--mui-divider);
+  display: flex;
+  flex-direction: column;
+  padding-top: 64px; /* offset for AppBar */
+  background-color: var(--mui-background-paper);
+  z-index: 1000;
+  border-radius: 0;
+}
+
+.mui-panel-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--mui-divider);
+}
+
+.mui-panel-content {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.mui-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mui-subtitle2 {
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 500;
+  font-size: 0.875rem;
+  line-height: 1.57;
+  letter-spacing: 0.00714em;
+  color: var(--mui-text-secondary);
+  text-transform: uppercase;
+}
+
+/* Custom Confidence Meter mapped to MUI */
+.mui-confidence-meter {
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mui-confidence-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width var(--mui-transition-standard), background-color var(--mui-transition-standard);
+}
+
+.mui-sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mui-source-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border-radius: var(--mui-shape-borderRadius);
+}
+
+.mui-source-icon {
+  font-size: 1.25rem;
+}
+
+.mui-source-text {
+  display: flex;
+  flex-direction: column;
+}

@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from core.pdf_processor import extract_text_async
 from core.vector_store import create_vector_store, load_vector_store
-from services.rag_service import generate_answer_async
+from services.rag_service import generate_answer_async, clear_conversation
 from services.embedding_service import get_embedding_model
 from services.llm_service import get_llm
 from models.schemas import QueryRequest, UploadProgress
@@ -185,7 +185,8 @@ async def upload(file: UploadFile = File(...), background_tasks: BackgroundTasks
 @app.post("/chat")
 async def chat(req: QueryRequest):
     """
-    Process question and generate answer asynchronously
+    Process question and generate answer asynchronously with context awareness
+    Supports conversation history and session tracking
     """
     if not app_state["models_loaded"]:
         raise HTTPException(500, "Models not loaded")
@@ -196,13 +197,28 @@ async def chat(req: QueryRequest):
     
     try:
         logger.info(f"❓ Question: {req.question}")
-        answer_data = await generate_answer_async(req.question)
+        if req.session_id:
+            logger.info(f"📌 Session: {req.session_id}")
+        
+        answer_data = await generate_answer_async(req.question, req.session_id)
         logger.info(f"✓ Answer generated ({len(answer_data['answer'])} chars)")
         return answer_data
     
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(500, f"Failed to generate answer: {str(e)}")
+
+
+@app.post("/clear-conversation")
+async def clear_conversation_endpoint(req):
+    """Clear conversation history for a session"""
+    try:
+        session_id = req.get("session_id") if isinstance(req, dict) else req.session_id
+        result = clear_conversation(session_id)
+        return result
+    except Exception as e:
+        logger.error(f"Clear conversation error: {e}")
+        raise HTTPException(500, f"Failed to clear conversation: {str(e)}")
 
 
 @app.get("/status")

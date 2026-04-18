@@ -23,11 +23,17 @@ export const uploadPDF = async (file) => {
   }
 };
 
-export const askQuestion = async (question) => {
+export const askQuestion = async (question, sessionId = null) => {
   try {
-    const response = await api.post('/chat', {
+    const payload = {
       question: question,
-    });
+    };
+    
+    if (sessionId) {
+      payload.session_id = sessionId;
+    }
+    
+    const response = await api.post('/chat', payload);
     return response.data;
   } catch (error) {
     throw new Error(error.response?.data?.detail || 'Failed to get answer');
