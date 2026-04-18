@@ -1,166 +1,227 @@
 import os
+import uuid
 import logging
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from dotenv import load_dotenv
+import asyncio
+import shutil
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+from pathlib import Path
 
-from pdf_processor import extract_text_from_pdf, get_text_chunks
-from vector_store import get_vector_store, initialize_embeddings
-from llm_manager import process_user_query
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
+
+from core.pdf_processor import extract_text_async
+from core.vector_store import create_vector_store, load_vector_store
+from services.rag_service import generate_answer_async
+from services.embedding_service import get_embedding_model
+from services.llm_service import get_llm
+from models.schemas import QueryRequest, UploadProgress
+from config import MAX_FILE_SIZE, CHUNK_SIZE, CHUNK_OVERLAP
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Load environment variables
 load_dotenv()
 
-# Global state
-app_state = {"vector_store_ready": False}
+# Global state for pre-loaded models
+app_state = {
+    "embedding_model": None,
+    "llm_model": None,
+    "models_loaded": False
+}
+
+# Temporary upload directory
+UPLOAD_DIR = Path("temp_uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage app startup and shutdown."""
+    """
+    Startup: Load models on server start
+    Shutdown: Cleanup resources
+    """
     # Startup
+    logger.info("🚀 Starting server - Loading models...")
     try:
-        initialize_embeddings()
-        app_state["vector_store_ready"] = True
-        logger.info("✓ Server initialized successfully")
+        # Load embedding model
+        logger.info("📊 Loading embedding model...")
+        app_state["embedding_model"] = get_embedding_model()
+        logger.info("✓ Embedding model loaded")
+        
+        # Load LLM
+        logger.info("🤖 Loading LLM model...")
+        app_state["llm_model"] = get_llm()
+        logger.info("✓ LLM model loaded")
+        
+        app_state["models_loaded"] = True
+        logger.info("✅ All models loaded successfully!")
     except Exception as e:
-        logger.error(f"Failed to initialize: {e}")
+        logger.error(f"❌ Error loading models: {e}")
+        app_state["models_loaded"] = False
+    
     yield
+    
     # Shutdown
-    logger.info("Server shutting down...")
+    logger.info("🛑 Shutting down server...")
+    # Cleanup temporary uploads
+    if UPLOAD_DIR.exists():
+        shutil.rmtree(UPLOAD_DIR)
+    logger.info("✓ Cleanup complete")
 
-app = FastAPI(title="Chat With PDF API", lifespan=lifespan)
 
-# Middleware
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+app = FastAPI(
+    title="ChatWithPDF RAG System",
+    description="AI-powered PDF Q&A with RAG - Async Support",
+    version="2.0",
+    lifespan=lifespan
+)
+
+# Apply CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-
-class QueryRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=500, description="Question about the document")
-
-class HealthResponse(BaseModel):
-    status: str
-    ready: bool
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint."""
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
     return {
         "status": "ok",
-        "ready": app_state["vector_store_ready"]
+        "models_loaded": app_state["models_loaded"],
+        "embedding_model": app_state["embedding_model"] is not None,
+        "llm_model": app_state["llm_model"] is not None
     }
 
+
 @app.post("/upload")
-async def upload_pdf(file: UploadFile = File(...)):
-    """Upload and process PDF file."""
+async def upload(file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()):
+    """
+    Upload and process PDF file with support for large files
+    Supports files up to MAX_FILE_SIZE
+    """
+    if not app_state["models_loaded"]:
+        raise HTTPException(500, "Models not loaded. Server may still be initializing.")
     
-    # Validate file
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    # Validate file type
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files allowed")
     
-    # Check file size (50MB max)
-    content = await file.read()
-    if len(content) > 50 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large. Maximum size: 50MB")
-    
-    temp_file_path = f"temp_{file.filename}"
+    # Create unique temp file
+    temp_filename = f"{uuid.uuid4().hex}.pdf"
+    temp_path = UPLOAD_DIR / temp_filename
     
     try:
-        # Write file (using sync operations which is fine in async context for I/O)
-        with open(temp_file_path, 'wb') as f:
-            f.write(content)
+        # Read file content
+        file_content = await file.read()
+        file_size = len(file_content)
         
-        logger.info(f"Processing PDF: {file.filename}")
-        
-        # Extract text
-        raw_text = extract_text_from_pdf(temp_file_path)
-        if not raw_text or not raw_text.strip():
+        # Check file size limit
+        if file_size > MAX_FILE_SIZE:
             raise HTTPException(
-                status_code=400,
-                detail="Could not extract text from PDF. Try: 1) Different PDF, 2) OCR service for scanned PDFs"
+                413,
+                f"File too large. Maximum size: {MAX_FILE_SIZE / (1024**2):.0f}MB"
             )
         
-        if len(raw_text) > 5000000:  # 5MB text limit
-            logger.warning(f"PDF text exceeds 5MB, truncating")
-            raw_text = raw_text[:5000000]
+        # Write file to disk
+        with open(temp_path, "wb") as f:
+            f.write(file_content)
         
-        # Process chunks
-        text_chunks = get_text_chunks(raw_text)
-        if not text_chunks:
-            raise HTTPException(status_code=400, detail="No valid text chunks extracted")
+        logger.info(f"📄 Processing PDF: {file.filename} ({file_size / (1024**2):.2f}MB)")
+        
+        # Extract text asynchronously
+        text = await extract_text_async(str(temp_path))
+        
+        if not text.strip():
+            raise HTTPException(400, "No text extracted from PDF")
+        
+        # Create chunks
+        logger.info(f"📋 Creating chunks (size: {CHUNK_SIZE}, overlap: {CHUNK_OVERLAP})...")
+        chunks = []
+        for i in range(0, len(text), CHUNK_SIZE - CHUNK_OVERLAP):
+            chunk = text[i : i + CHUNK_SIZE]
+            if chunk.strip():
+                chunks.append(chunk)
+        
+        logger.info(f"✓ Created {len(chunks)} chunks")
         
         # Create vector store
-        get_vector_store(text_chunks)
+        logger.info("🔍 Building vector store...")
+        await asyncio.to_thread(create_vector_store, chunks)
+        logger.info("✓ Vector store created successfully")
         
-        logger.info(f"✓ Successfully processed: {file.filename} ({len(text_chunks)} chunks)")
+        # Schedule cleanup
+        background_tasks.add_task(cleanup_temp_file, temp_path)
+        
         return {
-            "message": "PDF uploaded and processed successfully",
-            "chunks_created": len(text_chunks),
-            "text_length": len(raw_text)
+            "message": "PDF processed successfully",
+            "filename": file.filename,
+            "chunks": len(chunks),
+            "file_size_mb": round(file_size / (1024**2), 2),
+            "status": "ready"
         }
-        
+    
     except HTTPException:
+        # Clean up on HTTP errors
+        if temp_path.exists():
+            temp_path.unlink()
         raise
+    
     except Exception as e:
-        logger.error(f"Error processing PDF: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)[:100]}")
-    finally:
-        # Cleanup temp file
-        if os.path.exists(temp_file_path):
-            try:
-                os.remove(temp_file_path)
-            except Exception as e:
-                logger.warning(f"Failed to delete temp file: {e}")
-
+        logger.error(f"Upload error: {e}")
+        if temp_path.exists():
+            temp_path.unlink()
+        raise HTTPException(500, f"Upload failed: {str(e)}")
 
 
 @app.post("/chat")
-async def chat_with_pdf(request: QueryRequest):
-    """Process user query and return answer with sources."""
+async def chat(req: QueryRequest):
+    """
+    Process question and generate answer asynchronously
+    """
+    if not app_state["models_loaded"]:
+        raise HTTPException(500, "Models not loaded")
     
-    question = request.question.strip()
-    
-    if not question:
-        raise HTTPException(status_code=400, detail="Question cannot be empty")
-    
-    if not app_state["vector_store_ready"]:
-        raise HTTPException(status_code=503, detail="Server not ready. Try again in a moment.")
+    store = load_vector_store()
+    if not store:
+        raise HTTPException(400, "No PDF uploaded. Please upload a PDF first.")
     
     try:
-        response_dict = process_user_query(question)
-        
-        # Ensure response has all required fields
-        response_dict.setdefault("answer", "No response generated")
-        response_dict.setdefault("sources", [])
-        
-        return response_dict
+        logger.info(f"❓ Question: {req.question}")
+        answer_data = await generate_answer_async(req.question)
+        logger.info(f"✓ Answer generated ({len(answer_data['answer'])} chars)")
+        return answer_data
     
     except Exception as e:
-        logger.error(f"Error processing query: {e}", exc_info=True)
-        return {
-            "answer": "Sorry, I couldn't process your question. Please try again or rephrase your question.",
-            "sources": [],
-            "error": "internal_error"
-        }
+        logger.error(f"Chat error: {e}")
+        raise HTTPException(500, f"Failed to generate answer: {str(e)}")
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=os.getenv("ENV", "development") == "development"
-    )
+
+@app.get("/status")
+async def status():
+    """Get system status"""
+    store = load_vector_store()
+    return {
+        "server_status": "running",
+        "models_loaded": app_state["models_loaded"],
+        "pdf_uploaded": store is not None,
+        "embedding_model": "all-MiniLM-L6-v2",
+        "llm_model": "llama-3.3-70b-versatile",
+        "max_file_size_mb": MAX_FILE_SIZE / (1024**2)
+    }
+
+
+async def cleanup_temp_file(file_path: Path):
+    """Cleanup temporary file"""
+    await asyncio.sleep(60)  # Wait 60 seconds before cleanup
+    if file_path.exists():
+        file_path.unlink()
+        logger.info(f"🗑️ Cleaned up temp file: {file_path.name}")
