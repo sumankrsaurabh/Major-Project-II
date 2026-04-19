@@ -8,13 +8,17 @@ _store = None
 
 def create_vector_store(chunks):
     global _store
-
     docs = [Document(page_content=c) for c in chunks]
 
-    _store = FAISS.from_documents(
-        docs,
-        embedding=get_embedding_model()
-    )
+    existing_store = load_vector_store()
+    if existing_store:
+        existing_store.add_documents(docs)
+        _store = existing_store
+    else:
+        _store = FAISS.from_documents(
+            docs,
+            embedding=get_embedding_model()
+        )
 
     _store.save_local(VECTOR_PATH)
     return _store

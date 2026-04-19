@@ -10,6 +10,29 @@
   overflow: hidden;
 }
 
+.chat-export-btn {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  background-color: var(--mui-background-paper);
+  color: var(--mui-text-secondary);
+  border: 1px solid var(--mui-divider);
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  z-index: 10;
+  cursor: pointer;
+  transition: all var(--mui-transition-short);
+  box-shadow: var(--mui-shadow-1);
+}
+
+.chat-export-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--mui-primary-light);
+  border-color: var(--mui-primary-light);
+}
+
 /* Chat Messages Area - Scrolls internally */
 .chat-messages {
   flex: 1; 
@@ -180,6 +203,33 @@
 .confidence-high { border: 1px solid var(--mui-success-main); color: var(--mui-success-main); }
 .confidence-medium { border: 1px solid var(--mui-warning-main); color: var(--mui-warning-main); }
 .confidence-low { border: 1px solid var(--mui-error-main); color: var(--mui-error-main); }
+
+/* Quick Start Prompts */
+.quick-prompts-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 24px;
+  justify-content: center;
+}
+
+.quick-prompt-chip {
+  background-color: var(--mui-background-paper);
+  border: 1px solid var(--mui-divider);
+  color: var(--mui-primary-light);
+  padding: 8px 16px;
+  border-radius: 16px; /* Soft roundness */
+  font-family: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all var(--mui-transition-short);
+}
+
+.quick-prompt-chip:hover {
+  background-color: rgba(179, 157, 219, 0.12);
+  border-color: var(--mui-primary-main);
+  transform: translateY(-2px);
+}
 
 /* Input Area - MUI Outlined Input Emulator */
 .chat-input-area {

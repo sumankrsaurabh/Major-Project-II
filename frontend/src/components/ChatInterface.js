@@ -80,11 +80,14 @@ function ChatInterface({ onStatsUpdate, onMessageUpdate, sessionId: sessionIdPro
     });
   }, [onStatsUpdate]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = async (overrideMessage = null) => {
+    const textToUse = typeof overrideMessage === 'string' ? overrideMessage : inputValue;
+    if (!textToUse.trim()) return;
 
-    const userMessage = inputValue.trim();
-    setInputValue('');
+    const userMessage = textToUse.trim();
+    if (typeof overrideMessage !== 'string') {
+      setInputValue('');
+    }
     setError('');
 
     // Add user message to chat
@@ -172,8 +175,22 @@ function ChatInterface({ onStatsUpdate, onMessageUpdate, sessionId: sessionIdPro
     return Math.round(stats.avgConfidence * 100);
   };
 
+  const exportChat = () => {
+    const textContent = messages.map(m => `[${m.type.toUpperCase()}] ${m.timestamp.toLocaleTimeString()}\n${m.text}\n`).join('\n');
+    const blob = new Blob([textContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat_export_${sessionId.substring(0, 6)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="chat-interface">
+      <button className="chat-export-btn" onClick={exportChat} title="Export Chat to Markdown">
+        📥 Export Chat
+      </button>
       <div className="chat-messages">
         {messages.map((message) => (
           <div key={message.id} className={`message ${message.type}`}>
@@ -245,6 +262,21 @@ function ChatInterface({ onStatsUpdate, onMessageUpdate, sessionId: sessionIdPro
         <div className="chat-error">
           <span className="error-icon">⚠️</span>
           <span>{error}</span>
+        </div>
+      )}
+
+      {messages.length === 1 && (
+        <div className="quick-prompts-container">
+          {['What is the summary of this document?', 'Extract the key takeaways', 'Explain the methodology used'].map((prompt, idx) => (
+             <button 
+                key={idx} 
+                className="mui-chip quick-prompt-chip" 
+                onClick={() => handleSendMessage(prompt)}
+                disabled={isLoading}
+             >
+                {prompt}
+             </button>
+          ))}
         </div>
       )}
 
