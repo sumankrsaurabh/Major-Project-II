@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from pathlib import Path
 
+import uvicorn
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,10 +15,12 @@ from dotenv import load_dotenv
 
 from core.pdf_processor import extract_text_async
 from core.vector_store import create_vector_store, load_vector_store
+from core.nlp_processor import AdvancedTokenizer
 from services.rag_service import generate_answer_async, clear_conversation
 from services.embedding_service import get_embedding_model
 from services.llm_service import get_llm
 from models.schemas import QueryRequest, UploadProgress
+from routes.analysis_routes import router as analysis_router
 from config import MAX_FILE_SIZE, CHUNK_SIZE, CHUNK_OVERLAP
 
 # Setup logging
@@ -90,6 +93,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include analysis routes
+app.include_router(analysis_router)
+
 
 @app.get("/health")
 async def health():
@@ -145,11 +151,8 @@ async def upload(file: UploadFile = File(...), background_tasks: BackgroundTasks
         
         # Create chunks
         logger.info(f"📋 Creating chunks (size: {CHUNK_SIZE}, overlap: {CHUNK_OVERLAP})...")
-        chunks = []
-        for i in range(0, len(text), CHUNK_SIZE - CHUNK_OVERLAP):
-            chunk = text[i : i + CHUNK_SIZE]
-            if chunk.strip():
-                chunks.append(chunk)
+        tokenizer = AdvancedTokenizer()
+        chunks = tokenizer.chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
         
         logger.info(f"✓ Created {len(chunks)} chunks")
         
@@ -229,10 +232,11 @@ async def status():
         "server_status": "running",
         "models_loaded": app_state["models_loaded"],
         "pdf_uploaded": store is not None,
-        "embedding_model": "all-MiniLM-L6-v2",
-        "llm_model": "llama-3.3-70b-versatile",
+        "embedding_model": "custom-native-embeddings",
+        "llm_model": "custom-native-v1",
         "max_file_size_mb": MAX_FILE_SIZE / (1024**2)
     }
+
 
 
 async def cleanup_temp_file(file_path: Path):
@@ -241,3 +245,7 @@ async def cleanup_temp_file(file_path: Path):
     if file_path.exists():
         file_path.unlink()
         logger.info(f"🗑️ Cleaned up temp file: {file_path.name}")
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, log_level="info")

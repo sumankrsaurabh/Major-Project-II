@@ -1,0 +1,1 @@
+[{"role": "user", "content": "What is the summary of this document?", "timestamp": "2026-06-12T10:54:14.140399"}, {"role": "assistant", "content": "According to your document (analyzed natively via TF-IDF):\n\n[Context 1]. [Context 2].", "timestamp": "2026-06-12T10:54:14.141394"}]

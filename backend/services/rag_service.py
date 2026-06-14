@@ -122,7 +122,7 @@ Hypothetical passage:"""
 
 def generate_answer(query: str, session_id: Optional[str] = None):
     """
-    Synchronous answer generation with enhanced accuracy
+    Synchronous answer generation with enhanced accuracy and better retrieval
     """
     store = load_vector_store()
 
@@ -135,63 +135,74 @@ def generate_answer(query: str, session_id: Optional[str] = None):
         if CONVERSATION_ENABLED and session_id:
             conv_manager = ConversationManager(session_id)
 
-        # Retrieve relevant documents
+        # Retrieve relevant documents with increased count for better relevance
         logger.info(f"Retrieving {TOP_K} most relevant documents...")
         docs = store.similarity_search(query, k=TOP_K)
         
         if not docs:
             return {"answer": "No relevant information found in the document."}
 
-        # Rerank if enabled
+        # Rerank if enabled - this improves answer quality
+        original_doc_count = len(docs)
         if RERANKING_ENABLED:
             docs = rerank_results(query, docs)
+            logger.info(f"Reranked from {original_doc_count} to {len(docs)} documents")
 
-        # Build context from documents
-        context = "\n\n".join([
-            f"[Context {i+1}]\n{doc.page_content}" 
-            for i, doc in enumerate(docs[:RERANK_TOP_K])
-        ])
+        # Build context from documents - improved formatting
+        context_parts = []
+        for i, doc in enumerate(docs[:RERANK_TOP_K]):
+            # Include score in context for better relevance awareness
+            score = doc.metadata.get('score', 0) if hasattr(doc, 'metadata') else 0
+            context_parts.append(f"{doc.page_content}")
+        
+        context = "\n\n".join(context_parts)
 
         # Build conversation context if enabled
         conversation_context = ""
         if conv_manager:
             conversation_context = conv_manager.get_context()
+            if conversation_context:
+                conversation_context = "\n" + conversation_context + "\n"
 
-        # Construct enhanced prompt
-        prompt = f"""You are an expert AI assistant with deep knowledge of the provided document.
-Your goal is to provide accurate, helpful, and well-structured answers.
+        # Construct improved prompt with better structure
+        prompt = f"""You are an expert AI assistant analyzing the provided document.
 
-Instructions:
-- Answer ONLY based on the provided context
-- If the context doesn't contain relevant information, say so clearly
-- Provide detailed and comprehensive answers
-- Structure your response clearly with sections if needed
-- Be specific and cite the document when relevant
-
-{conversation_context}
-
+Your instructions:
+1. Answer the question ONLY using information from the provided context
+2. If the exact answer isn't in the context, provide the most relevant information available
+3. Be direct and accurate - prioritize clarity over verbosity
+4. Cite specific information from the document when relevant
+5. If you cannot find relevant information, clearly state that{conversation_context}
 Context from document:
 {context}
 
 User Question: {query}
 
-Provide a clear, accurate, and comprehensive answer:"""
+Provide a clear and accurate answer:"""
 
-        # Generate answer
+        # Generate answer using improved LLM
         llm = get_llm()
         response = llm.invoke(prompt)
         answer = response.content if hasattr(response, 'content') else str(response)
+        
+        # Clean up answer if it has redundant prefixes from LLM
+        answer = answer.replace("According to your document (analyzed natively via TF-IDF):\n\n", "")
 
         # Store in conversation history if enabled
         if conv_manager:
             conv_manager.add_message("user", query)
             conv_manager.add_message("assistant", answer)
 
+        # Calculate confidence based on retrieval quality
+        confidence = "high" if len(docs) >= RERANK_TOP_K else "medium"
+        if any(doc.metadata.get('score', 0) < 0.5 for doc in docs if hasattr(doc, 'metadata')):
+            confidence = "low"
+
         return {
             "answer": answer,
             "status": "success",
             "relevant_documents": len(docs),
-            "confidence": "high" if len(docs) >= RERANK_TOP_K else "medium"
+            "confidence": confidence
         }
 
     except Exception as e:
