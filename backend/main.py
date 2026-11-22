@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile\nfrom fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware\nfrom starlette.exceptions import HTTPException as StarletteHTTPException\nfrom starlette.responses import JSONResponse
 
 from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_FILE_SIZE
 from core.nlp_processor import AdvancedTokenizer
@@ -22,7 +22,7 @@ from core.vector_store import (
 )
 from models.schemas import (
     ChatResponse, ClearConversationRequest, ClearConversationResponse, DeleteDocumentResponse, HealthResponse,
-    QueryRequest, StatusResponse, UploadResponse,
+    ErrorResponse, QueryRequest, StatusResponse, UploadResponse,
 )
 from routes.analysis_routes import router as analysis_router
 from services.embedding_service import get_embedding_model
@@ -64,6 +64,71 @@ app = FastAPI(
     version="2.1.0",
     lifespan=lifespan,
 )
+
+@app.middleware("http")
+async def attach_request_id(request: Request, call_next):
+    request_id = uuid.uuid4().hex
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+def _error_code(status_code: int) -> str:
+    return {
+        400: "bad_request",
+        401: "unauthorized",
+        403: "forbidden",
+        404: "not_found",
+        409: "conflict",
+        413: "payload_too_large",
+        415: "unsupported_media_type",
+        422: "validation_error",
+        429: "rate_limited",
+        503: "service_unavailable",
+    }.get(status_code, "request_failed" if status_code < 500 else "internal_error")
+
+
+def _error_response(request: Request, status_code: int, code: str, message: str, headers=None):
+    request_id = getattr(request.state, "request_id", "unavailable")
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": message,
+                "request_id": request_id,
+            }
+        },
+        headers=headers,
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def handle_http_exception(request: Request, exc: StarletteHTTPException):
+    message = exc.detail if isinstance(exc.detail, str) else "The request could not be completed"
+    return _error_response(
+        request, exc.status_code, _error_code(exc.status_code), message, exc.headers
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_exception(request: Request, exc: RequestValidationError):
+    return _error_response(
+        request, 422, "validation_error", "Request validation failed"
+    )
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_exception(request: Request, exc: Exception):
+    logger.exception(
+        "Unhandled API exception",
+        extra={"request_id": getattr(request.state, "request_id", "unavailable")},
+    )
+    return _error_response(
+        request, 500, "internal_error", "An unexpected server error occurred"
+    )
+
 
 cors_origins = [
     origin.strip()
