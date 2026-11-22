@@ -92,7 +92,7 @@ def test_generate_answer_returns_grounded_source_metadata(monkeypatch):
         def invoke(self, prompt):
             assert "[S1 | annual-report.pdf | Page 7]" in prompt
             assert "[S2 | annual-report.pdf | Page 8]" in prompt
-            return SimpleNamespace(content="Revenue increased by 12 percent [S1].")
+            return SimpleNamespace(content="Revenue increased by 12 percent [S1]. Unsupported claim [S99].")
 
     monkeypatch.setattr(rag_service, "load_vector_store", lambda _workspace: FakeStore())
     monkeypatch.setattr(rag_service, "get_llm", FakeLLM)
@@ -102,6 +102,9 @@ def test_generate_answer_returns_grounded_source_metadata(monkeypatch):
     result = rag_service.generate_answer("What happened to revenue?")
 
     assert result["status"] == "success"
+    assert "[S1]" in result["answer"]
+    assert "[S99]" not in result["answer"]
+    assert "[source unavailable]" in result["answer"]
     assert result["citations"] == [
         {
             "citation_id": "S1",
