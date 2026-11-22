@@ -58,3 +58,41 @@ def test_missing_workspace_does_not_fall_back_to_another(isolated_storage):
     vector_store.create_vector_store(["default workspace content"], "default")
 
     assert vector_store.load_vector_store("unrelated-workspace") is None
+
+
+def test_document_catalog_and_delete_preserve_other_documents(isolated_storage):
+    vector_store.create_vector_store(
+        ["first document chunk", "first document second chunk"],
+        "workspace-docs", "doc-first", "first.pdf",
+    )
+    vector_store.create_vector_store(
+        ["second document chunk"],
+        "workspace-docs", "doc-second", "second.pdf",
+    )
+
+    catalog = vector_store.list_workspace_documents("workspace-docs")
+    assert {item["document_id"] for item in catalog} == {"doc-first", "doc-second"}
+    assert next(item for item in catalog if item["document_id"] == "doc-first")["chunks"] == 2
+
+    assert vector_store.delete_workspace_document("workspace-docs", "doc-first") is True
+    remaining = vector_store.list_workspace_documents("workspace-docs")
+    assert remaining == [{"document_id": "doc-second", "filename": "second.pdf", "chunks": 1}]
+    store = vector_store.load_vector_store("workspace-docs")
+    assert [doc.page_content for doc in store.documents] == ["second document chunk"]
+
+
+def test_deleting_last_document_removes_workspace_index(isolated_storage):
+    vector_store.create_vector_store(["only document"], "workspace-empty", "doc-only", "only.pdf")
+    assert vector_store.delete_workspace_document("workspace-empty", "doc-only") is True
+    assert vector_store.load_vector_store("workspace-empty") is None
+    assert vector_store.list_workspace_documents("workspace-empty") == []
+
+
+def test_index_archive_keeps_vectors_and_metadata_together(isolated_storage):
+    vector_store.create_vector_store(["atomic archive content"], "workspace-atomic", "doc-atomic", "atomic.pdf")
+    archive = vector_store._workspace_path("workspace-atomic") / "index.npz"
+    assert archive.is_file()
+    vector_store.clear_vector_store_cache()
+    restored = vector_store.load_vector_store("workspace-atomic")
+    assert restored.documents[0].metadata["document_id"] == "doc-atomic"
+    assert restored.vectors.shape[0] == 1
