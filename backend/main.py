@@ -265,6 +265,8 @@ async def chat(req: QueryRequest):
 
     try:
         answer_data = await generate_answer_async(req.question, req.session_id, workspace_id)
+        if answer_data.get("status") == "error":
+            raise HTTPException(status_code=500, detail="Unable to generate an answer. Check server logs.")
         logger.info("Chat response generated (%s characters)", len(answer_data.get("answer", "")))
         return answer_data
     except Exception:
