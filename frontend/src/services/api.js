@@ -84,7 +84,7 @@ class PDFService extends BaseApiService {
   }
 
   async getStatus(workspaceId = 'default') {
-    return this.request('GET', '/api/v1/workspaces/' + workspaceId + '/status', null, { params: { workspace_id: workspaceId } });
+    return this.request('GET', `/api/v1/workspaces/${workspaceId}/status`);
   }
 
   async getHealth() {
