@@ -35,10 +35,15 @@ def test_query_rejects_empty_or_oversized_questions():
         QueryRequest(question="x" * 501)
 
 
-def test_clear_conversation_requires_safe_session_id():
-    assert ClearConversationRequest(session_id="session-01").session_id == "session-01"
+def test_clear_conversation_requires_safe_session_and_workspace_ids():
+    request = ClearConversationRequest(session_id="session-01", workspace_id="workspace-a")
+    assert request.session_id == "session-01"
+    assert request.workspace_id == "workspace-a"
+    assert ClearConversationRequest(session_id="session-01").workspace_id == "default"
     with pytest.raises(ValidationError):
         ClearConversationRequest(session_id="../outside")
+    with pytest.raises(ValidationError):
+        ClearConversationRequest(session_id="session-01", workspace_id="../outside")
 
 
 def test_upload_response_requires_server_generated_document_scope():
