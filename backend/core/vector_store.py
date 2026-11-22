@@ -15,7 +15,6 @@ from services.embedding_service import get_embedding_model
 WORKSPACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 DOCUMENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
-_store_cache = {}
 _store_lock = threading.RLock()
 
 
@@ -213,7 +212,6 @@ def create_vector_store(
         ]
         store.add_documents(documents)
         store.save_local(str(path))
-        _store_cache[workspace_id] = store
         return store
 
 
@@ -246,13 +244,11 @@ def delete_workspace_document(workspace_id: str, document_id: str):
             return False
         if store.documents:
             store.save_local(str(path))
-            _store_cache[workspace_id] = store
         else:
             (path / "index.npz").unlink(missing_ok=True)
             # Remove legacy files only after the workspace has no indexed content.
             (path / "vectors.npy").unlink(missing_ok=True)
             (path / "documents.json").unlink(missing_ok=True)
-            _store_cache.pop(workspace_id, None)
         return True
 
 
