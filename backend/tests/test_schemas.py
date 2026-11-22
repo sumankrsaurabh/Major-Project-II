@@ -3,7 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from models.schemas import (\n    ChatResponse, ClearConversationRequest, DeleteDocumentResponse, HealthResponse,\n    QueryRequest, StatusResponse, UploadResponse,\n)
+from models.schemas import (
+    ChatResponse, ClearConversationRequest, DeleteDocumentResponse, HealthResponse,
+    QueryRequest, StatusResponse, UploadResponse,
+)
 
 
 @pytest.mark.parametrize("session_id", ["session-01", "user_123", "A9"])
