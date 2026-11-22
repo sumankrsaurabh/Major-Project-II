@@ -12,11 +12,21 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = Field(None, min_length=1, max_length=64, pattern=SESSION_ID_PATTERN, description="Opaque session identifier")
 
 
+class SourceCitation(BaseModel):
+    citation_id: str
+    document_id: Optional[str] = None
+    filename: str
+    page_number: Optional[int] = None
+    chunk_index: Optional[int] = None
+    score: Optional[float] = None
+
+
 class ChatResponse(BaseModel):
     answer: str
     status: Optional[str] = "success"
     relevant_documents: Optional[int] = None
     confidence: Optional[str] = None
+    citations: List[SourceCitation] = Field(default_factory=list)
 
 
 class WorkspaceDocumentSummary(BaseModel):
