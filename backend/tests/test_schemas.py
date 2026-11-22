@@ -1,3 +1,5 @@
+"""Regression tests for API input validation and safe session identifiers."""
+
 import pytest
 from pydantic import ValidationError
 
