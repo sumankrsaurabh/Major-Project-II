@@ -84,7 +84,9 @@ async def health():
         "status": "ok",
         "models_loaded": app_state["models_loaded"],
         "embedding_model": app_state["embedding_model"] is not None,
-        "llm_model": app_state["llm_model"] is not None,\n        "answer_engine": getattr(app_state["llm_model"], "model_name", "unavailable"),\n        "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
+        "llm_model": app_state["llm_model"] is not None,
+        "answer_engine": getattr(app_state["llm_model"], "model_name", "unavailable"),
+        "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
     }
 
 
@@ -211,7 +213,9 @@ async def status(workspace_id: str = Query("default", min_length=1, max_length=6
         "pdf_uploaded": store is not None,
         "documents": list_workspace_documents(workspace_id),
         "embedding_model": getattr(app_state["embedding_model"], "model_name", "unavailable"),
-        "llm_model": getattr(app_state["llm_model"], "model_name", "unavailable"),\n        "answer_engine": getattr(app_state["llm_model"], "model_name", "unavailable"),\n        "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
+        "llm_model": getattr(app_state["llm_model"], "model_name", "unavailable"),
+        "answer_engine": getattr(app_state["llm_model"], "model_name", "unavailable"),
+        "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
         "max_file_size_mb": MAX_FILE_SIZE / (1024**2),
     }
 
