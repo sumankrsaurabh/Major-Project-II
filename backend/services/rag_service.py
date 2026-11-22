@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
 
-from core.vector_store import load_vector_store
+from core.vector_store import load_vector_store, validate_workspace_id
 from services.llm_service import get_llm
 from config import (
     TOP_K, 
@@ -29,11 +29,15 @@ Path(CONVERSATION_HISTORY_PATH).mkdir(exist_ok=True)
 class ConversationManager:
     """Manage conversation history for context-aware responses"""
     
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, workspace_id: str = "default"):
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", session_id or ""):
             raise ValueError("Invalid session identifier")
+        self.workspace_id = validate_workspace_id(workspace_id)
         self.session_id = session_id
-        self.history_file = Path(CONVERSATION_HISTORY_PATH) / f"{session_id}.json"
+        base_path = Path(CONVERSATION_HISTORY_PATH)
+        self.history_dir = base_path if self.workspace_id == "default" else base_path / "workspaces" / self.workspace_id
+        self.history_dir.mkdir(parents=True, exist_ok=True)
+        self.history_file = self.history_dir / f"{session_id}.json"
         self.messages = self._load_history()
     
     def _load_history(self) -> List[Dict]:
@@ -135,7 +139,7 @@ def generate_answer(query: str, session_id: Optional[str] = None, workspace_id: 
         # Initialize conversation manager if enabled
         conv_manager = None
         if CONVERSATION_ENABLED and session_id:
-            conv_manager = ConversationManager(session_id)
+            conv_manager = ConversationManager(session_id, workspace_id)
 
         # Retrieve relevant documents with increased count for better relevance
         logger.info(f"Retrieving {TOP_K} most relevant documents...")
@@ -231,14 +235,14 @@ async def generate_answer_async(query: str, session_id: Optional[str] = None, wo
         }
 
 
-def clear_conversation(session_id: str):
+def clear_conversation(session_id: str, workspace_id: str = "default"):
     """Clear conversation history for a session"""
     try:
         conv_manager = ConversationManager(session_id)
         conv_manager.clear()
-        logger.info(f"Cleared conversation for session {session_id}")
+        logger.info("Cleared conversation for workspace %s", workspace_id)
         return {"status": "cleared"}
     except Exception as e:
         logger.error(f"Error clearing conversation: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Unable to clear conversation"}
 
