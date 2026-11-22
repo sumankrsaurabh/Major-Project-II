@@ -9,7 +9,7 @@ This roadmap is intentionally incremental. Existing functionality is not conside
 - [ ] Verify frontend API paths and response schemas against FastAPI.
 - [ ] Replace wildcard CORS and correct health/readiness semantics.
 - [ ] Enforce upload size and content validation consistently.
-- [ ] Ensure temporary uploads are cleaned on success and failure without deleting active requests' files.
+- [x] Ensure temporary uploads are cleaned on success and failure without deleting active requests' files.\n- [x] Remove import-time NLTK corpus downloads and add deterministic offline tokenization fallbacks.
 - [ ] Add reproducible setup instructions and `.env.example`.
 
 **Exit criteria:** a new engineer can install and run the app using documented steps; baseline tests and frontend production build pass.
@@ -17,7 +17,7 @@ This roadmap is intentionally incremental. Existing functionality is not conside
 ## P1 — Maintainable architecture
 
 - [ ] Introduce validated application settings.
-- [ ] Introduce API v1 router and typed response/error contracts.
+- [x] Introduce versioned API v1 compatibility routes while preserving legacy route aliases.\n- [ ] Complete typed response/error contracts across every public endpoint.
 - [ ] Create application/domain/infrastructure boundaries.
 - [ ] Move existing behavior behind use cases and adapters.
 - [ ] Add dependency injection and remove unnecessary global mutable state.
@@ -28,7 +28,7 @@ This roadmap is intentionally incremental. Existing functionality is not conside
 
 ## P2 — Reliable local AI and RAG
 
-- [ ] Implement Ollama provider with configurable base URL, model, timeout, and health checks.
+- [x] Implement configurable local Ollama provider with base URL, model, timeout, and startup readiness check.\n- [ ] Add runtime smoke tests against an installed Ollama model.
 - [ ] Clearly distinguish extractive fallback from generative model output.
 - [ ] Implement embedding provider contract and explicit model identity.
 - [ ] Implement FAISS adapter with safe persistence and index metadata.
