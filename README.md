@@ -7,7 +7,8 @@
 - [Target architecture](docs/ARCHITECTURE.md)
 - [Engineering roadmap and release gates](docs/ENGINEERING_ROADMAP.md)
 - [Contribution and code standards](CONTRIBUTING.md)
-- [Product UI standards](docs/PRODUCT_UI_STANDARD.md)\n- [Architecture decision records](docs/adr/)
+- [Product UI standards](docs/PRODUCT_UI_STANDARD.md)
+- [Architecture decision records](docs/adr/)
 
 The project is being evolved as a modular monolith with a React client, FastAPI application, replaceable local AI providers, workspace-scoped document indexes, and grounded citations. The current implementation is not yet a production release.
 
