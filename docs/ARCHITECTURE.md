@@ -170,9 +170,11 @@ Feature modules own their UI, API adapters, hooks, and feature-specific types. S
 
 ## 7. Storage and tenancy
 
-For the first desktop/local release, a single-user profile may use local filesystem storage and SQLite metadata. For a hosted multi-user deployment, introduce authenticated principals, tenant-scoped repositories, per-tenant document authorization, and an appropriate relational database before exposing the service publicly.
+For the current local-first implementation, the browser maintains an opaque workspace ID and the API stores each workspace index under a separate directory. The historical `default` workspace remains available as a compatibility path. Workspace IDs are validated before path construction, and a missing workspace never falls back to another workspace.
 
-Vector indexes must be scoped by user/workspace. Never use a single global index for unrelated users. Store index metadata including embedding model name, dimensions, normalization strategy, and schema version. Reject incompatible indexes and provide an explicit rebuild path.
+This is local workspace separation, not an authentication or authorization boundary. Before any hosted multi-user deployment, introduce authenticated principals, tenant-scoped repositories, per-tenant document authorization, and an appropriate relational database. Do not treat client-provided workspace IDs as proof of identity.
+
+Vector indexes must be scoped by user/workspace. Store index metadata including embedding model name, dimensions, normalization strategy, and schema version. Reject incompatible indexes and provide an explicit rebuild path. Current NumPy persistence does not yet provide a transactional multi-file commit or cross-process write coordination; production deployment needs a transactional index adapter or per-workspace process-safe locking.
 
 ## 8. API conventions
 
