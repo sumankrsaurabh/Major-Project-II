@@ -7,6 +7,9 @@ from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,7 +26,6 @@ from services.embedding_service import get_embedding_model
 from services.llm_service import get_llm
 from services.rag_service import clear_conversation, generate_answer_async
 
-load_dotenv()
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,9 @@ async def lifespan(app: FastAPI):
     try:
         app_state["embedding_model"] = get_embedding_model()
         app_state["llm_model"] = get_llm()
+        readiness_check = getattr(app_state["llm_model"], "check_ready", None)
+        if readiness_check and not readiness_check():
+            raise RuntimeError("Configured local generative model is not available in Ollama")
         app_state["models_loaded"] = True
         logger.info("AI services initialized")
     except Exception:
@@ -79,7 +84,7 @@ async def health():
         "status": "ok",
         "models_loaded": app_state["models_loaded"],
         "embedding_model": app_state["embedding_model"] is not None,
-        "llm_model": app_state["llm_model"] is not None,
+        "llm_model": app_state["llm_model"] is not None,\n        "answer_engine": getattr(app_state["llm_model"], "model_name", "unavailable"),\n        "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
     }
 
 
@@ -206,7 +211,7 @@ async def status(workspace_id: str = Query("default", min_length=1, max_length=6
         "pdf_uploaded": store is not None,
         "documents": list_workspace_documents(workspace_id),
         "embedding_model": getattr(app_state["embedding_model"], "model_name", "unavailable"),
-        "llm_model": getattr(app_state["llm_model"], "model_name", "unavailable"),
+        "llm_model": getattr(app_state["llm_model"], "model_name", "unavailable"),\n        "answer_engine": getattr(app_state["llm_model"], "model_name", "unavailable"),\n        "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
         "max_file_size_mb": MAX_FILE_SIZE / (1024**2),
     }
 
