@@ -7,13 +7,18 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import logging
-from services.comprehensive_analysis_service import ComprehensiveAnalysisService, AdvancedQAService
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-# Initialize services
-comprehensive_service = ComprehensiveAnalysisService()
-qa_service = AdvancedQAService(comprehensive_service)
+@lru_cache(maxsize=1)
+def get_analysis_services():
+    """Construct optional analysis services only when an analysis endpoint is used."""
+    from services.comprehensive_analysis_service import ComprehensiveAnalysisService, AdvancedQAService
+
+    comprehensive_service = ComprehensiveAnalysisService()
+    return comprehensive_service, AdvancedQAService(comprehensive_service)
+
 
 # Create router
 router = APIRouter(prefix="/analysis", tags=["Analysis"])
@@ -57,6 +62,7 @@ class AnalysisResponse(BaseModel):
 async def analyze_document(request: DocumentAnalysisRequest):
     """Comprehensive document analysis with NLP, entities, and key phrases"""
     try:
+        comprehensive_service, _ = get_analysis_services()
         result = await comprehensive_service.analyze_document(
             request.text,
             detailed=request.detailed
@@ -71,6 +77,7 @@ async def analyze_document(request: DocumentAnalysisRequest):
 async def analyze_query(request: QueryRequest):
     """Analyze user query for intent, question type, and entities"""
     try:
+        comprehensive_service, _ = get_analysis_services()
         result = await comprehensive_service.analyze_query(request.query)
         return AnalysisResponse(status="success", data=result)
     except Exception as e:
@@ -82,6 +89,7 @@ async def analyze_query(request: QueryRequest):
 async def extract_insights(request: DocumentAnalysisRequest):
     """Extract key insights and suggestions from text"""
     try:
+        comprehensive_service, _ = get_analysis_services()
         result = await comprehensive_service.extract_insights(request.text)
         return AnalysisResponse(status="success", data=result)
     except Exception as e:
@@ -93,6 +101,7 @@ async def extract_insights(request: DocumentAnalysisRequest):
 async def process_conversation(request: ConversationRequest):
     """Process conversation with context and entity tracking"""
     try:
+        comprehensive_service, _ = get_analysis_services()
         result = await comprehensive_service.process_conversation(
             request.conversation_id,
             request.user_query,
@@ -108,6 +117,7 @@ async def process_conversation(request: ConversationRequest):
 async def compare_texts(request: TextComparisonRequest):
     """Compare two texts for similarities and differences"""
     try:
+        comprehensive_service, _ = get_analysis_services()
         result = await comprehensive_service.compare_texts(
             request.text1,
             request.text2
@@ -122,6 +132,7 @@ async def compare_texts(request: TextComparisonRequest):
 async def generate_answer(request: AnswerGenerationRequest):
     """Generate answer with reasoning and confidence"""
     try:
+        _, qa_service = get_analysis_services()
         result = await qa_service.generate_answer(
             request.question,
             request.context
