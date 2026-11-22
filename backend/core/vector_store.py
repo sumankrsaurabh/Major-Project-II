@@ -32,7 +32,6 @@ def _workspace_write_transaction(workspace_id: str):
     connection = sqlite3.connect(str(lock_db), timeout=30, isolation_level=None)
     try:
         connection.execute("PRAGMA busy_timeout = 30000")
-        connection.execute("PRAGMA journal_mode = WAL")
         connection.execute(
             "CREATE TABLE IF NOT EXISTS workspace_locks ("
             "workspace_id TEXT PRIMARY KEY, touched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
