@@ -153,8 +153,8 @@ Feature modules own their UI, API adapters, hooks, and feature-specific types. S
 5. Normalize text without removing meaningful headings, tables, or page boundaries.
 6. Chunk by document structure with bounded size and overlap.
 7. Generate embeddings in batches using the configured embedding model.
-8. Persist vector index and document metadata atomically, with a recoverable ingestion state.
-9. Expose document status only after indexing is complete.
+8. Assign a server-generated document ID and persist its chunks with source metadata in the workspace index. The current local adapter writes vectors and chunk metadata together in one atomically replaced NumPy archive.
+9. Expose workspace document inventory only after indexing is complete; support deletion of a document and its associated vectors.
 10. On failure, clean temporary files and mark the document failed with a safe error code.
 
 ## 6. Retrieval and answer lifecycle
@@ -174,7 +174,7 @@ For the current local-first implementation, the browser maintains an opaque work
 
 This is local workspace separation, not an authentication or authorization boundary. Before any hosted multi-user deployment, introduce authenticated principals, tenant-scoped repositories, per-tenant document authorization, and an appropriate relational database. Do not treat client-provided workspace IDs as proof of identity.
 
-Vector indexes must be scoped by user/workspace. Store index metadata including embedding model name, dimensions, normalization strategy, and schema version. Reject incompatible indexes and provide an explicit rebuild path. Current NumPy persistence does not yet provide a transactional multi-file commit or cross-process write coordination; production deployment needs a transactional index adapter or per-workspace process-safe locking.
+Vector indexes must be scoped by user/workspace. Store index metadata including embedding model name, dimensions, normalization strategy, and schema version. Reject incompatible indexes and provide an explicit rebuild path. The local NumPy adapter now persists vectors and chunk metadata in one atomically replaced archive and synchronizes access within one process. It does not yet coordinate writes across multiple server processes; production deployment needs a transactional index adapter or process-safe workspace locking.
 
 ## 8. API conventions
 
