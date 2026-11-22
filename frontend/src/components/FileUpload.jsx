@@ -8,7 +8,8 @@ import {
   HardDrive,
   Cpu,
   Layers,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { pdfService } from '../services/api';
 
@@ -368,6 +369,34 @@ export default function FileUpload({ workspaceId, pdfStatus, setPdfStatus, onUpl
                 </div>
               </div>
             </div>
+
+            {Array.isArray(pdfStatus.documents) && pdfStatus.documents.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 650 }}>Workspace documents</h4>
+                {pdfStatus.documents.map((document) => (
+                  <div key={document.document_id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: '0.75rem', padding: '0.65rem', border: '1px solid var(--border-light)',
+                    borderRadius: 'var(--radius-md)'
+                  }}>
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{document.filename}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{document.chunks} chunks</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      aria-label={`Delete ${document.filename}`}
+                      title="Delete document"
+                      onClick={(event) => { event.stopPropagation(); handleDeleteDocument(document.document_id); }}
+                      style={{ padding: '0.45rem', flexShrink: 0 }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div style={{
               marginTop: 'auto',
