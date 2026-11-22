@@ -6,7 +6,7 @@ This roadmap is intentionally incremental. Existing functionality is not conside
 
 - [ ] Inventory every backend route, frontend screen, dependency, and data directory.
 - [ ] Add baseline tests for existing upload, status, chat, and clear-conversation behavior.
-- [ ] Verify frontend API paths and response schemas against FastAPI.
+- [x] Verify frontend core API paths and response schemas against the versioned FastAPI surface; keep broader endpoint contract coverage in CI.
 - [ ] Replace wildcard CORS and correct health/readiness semantics.
 - [ ] Enforce upload size and content validation consistently.
 - [x] Ensure temporary uploads are cleaned on success and failure without deleting active requests' files.
@@ -22,7 +22,7 @@ This roadmap is intentionally incremental. Existing functionality is not conside
 - [ ] Complete typed response/error contracts across every public endpoint.
 - [ ] Create application/domain/infrastructure boundaries.
 - [ ] Move existing behavior behind use cases and adapters.
-- [ ] Add dependency injection and remove unnecessary global mutable state.
+- [ ] Add dependency injection and remove unnecessary global mutable state.\n- [x] Defer optional analysis-service construction until an analysis endpoint is first used.
 - [ ] Add Python lint/format/type-check configuration.
 - [ ] Add frontend feature folders and shared design tokens.
 
