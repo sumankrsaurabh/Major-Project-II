@@ -170,7 +170,7 @@ Feature modules own their UI, API adapters, hooks, and feature-specific types. S
 
 ## 7. Storage and tenancy
 
-For the current local-first implementation, the browser maintains an opaque workspace ID and the API stores each workspace index under a separate directory. The historical `default` workspace remains available as a compatibility path. Workspace IDs are validated before path construction, and a missing workspace never falls back to another workspace.
+For the current local-first implementation, the browser maintains an opaque workspace ID and the API stores each workspace index under a separate directory. Conversation histories are also stored beneath the workspace boundary (with the historical `default` workspace path retained for compatibility), so reusing a session ID in another workspace does not share prior messages. Workspace IDs are validated before path construction, and a missing workspace never falls back to another workspace.
 
 This is local workspace separation, not an authentication or authorization boundary. Before any hosted multi-user deployment, introduce authenticated principals, tenant-scoped repositories, per-tenant document authorization, and an appropriate relational database. Do not treat client-provided workspace IDs as proof of identity.
 
