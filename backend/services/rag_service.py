@@ -238,7 +238,7 @@ async def generate_answer_async(query: str, session_id: Optional[str] = None, wo
 def clear_conversation(session_id: str, workspace_id: str = "default"):
     """Clear conversation history for a session"""
     try:
-        conv_manager = ConversationManager(session_id)
+        conv_manager = ConversationManager(session_id, workspace_id)
         conv_manager.clear()
         logger.info("Cleared conversation for workspace %s", workspace_id)
         return {"status": "cleared"}
