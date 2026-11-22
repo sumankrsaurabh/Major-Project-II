@@ -1,3 +1,19 @@
+# ChatWithPDF — Yuktara Technologies
+
+> **Engineering status:** Active modernization. This repository contains an existing prototype and a staged plan toward production readiness. Features described in older sections are not automatically evidence of production readiness; see the engineering roadmap and verify each capability against tests.
+
+## Engineering handbook
+
+- [Target architecture](docs/ARCHITECTURE.md)
+- [Engineering roadmap and release gates](docs/ENGINEERING_ROADMAP.md)
+- [Contribution and code standards](CONTRIBUTING.md)
+
+The project is being evolved as a modular monolith with a React client, FastAPI application, replaceable local AI providers, page-aware document ingestion, and grounded citations. See the architecture document for the target boundaries and migration rules.
+
+## Current repository guide
+
+The sections below describe the existing prototype and should be treated as implementation notes until verified by automated tests.
+
 # 🚀 Advanced Chat with PDF - Complete System Guide
 
 ## 📖 Overview
