@@ -27,3 +27,37 @@ def test_validation_errors_do_not_echo_submitted_values():
     assert payload["error"]["message"] == "Request validation failed"
     assert payload["error"]["request_id"] == response.headers["X-Request-ID"]
     assert '""' not in response.text
+
+
+def test_clear_conversation_passes_workspace_scope(monkeypatch):
+    import main
+
+    captured = {}
+
+    def fake_clear(session_id, workspace_id):
+        captured["session_id"] = session_id
+        captured["workspace_id"] = workspace_id
+        return {"status": "cleared"}
+
+    monkeypatch.setattr(main, "clear_conversation", fake_clear)
+    response = client.post(
+        "/api/v1/conversations/clear",
+        json={"session_id": "same-session", "workspace_id": "workspace-a"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "cleared"
+    assert captured == {
+        "session_id": "same-session",
+        "workspace_id": "workspace-a",
+    }
+
+
+def test_clear_conversation_rejects_invalid_workspace():
+    response = client.post(
+        "/api/v1/conversations/clear",
+        json={"session_id": "same-session", "workspace_id": "../outside"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
