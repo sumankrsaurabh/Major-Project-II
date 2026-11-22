@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { pdfService } from '../services/api';
 
-export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess }) {
+export default function FileUpload({ workspaceId, pdfStatus, setPdfStatus, onUploadSuccess }) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadState, setUploadState] = useState('idle'); // idle, uploading, processing, success, error
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -31,7 +31,7 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
   };
 
   const processFile = async (file) => {
-    if (!file.name.endsWith('.pdf')) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
       setErrorMsg('Invalid file format. Please upload a PDF file only.');
       setUploadState('error');
       return;
@@ -52,7 +52,7 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
     setErrorMsg('');
 
     try {
-      const response = await pdfService.uploadPDF(file, (progressEvent) => {
+      const response = await pdfService.uploadPDF(file, workspaceId, (progressEvent) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         setUploadProgress(percentCompleted);
         if (percentCompleted === 100) {
