@@ -165,6 +165,14 @@ class OllamaLLM:
         self.temperature = temperature
         self._httpx = httpx
 
+    def check_ready(self) -> bool:
+        response = self._httpx.post(
+            f"{self.base_url}/api/show",
+            json={"model": self.model_name},
+            timeout=min(self.timeout, 10.0),
+        )
+        return response.status_code == 200
+
     def invoke(self, prompt: str) -> NativeResponse:
         response = self._httpx.post(
             f"{self.base_url}/api/chat",
