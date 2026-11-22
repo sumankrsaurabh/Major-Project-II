@@ -70,9 +70,10 @@ class BaseApiService {
  * PDFService - Handles operations related to PDF document upload and status.
  */
 class PDFService extends BaseApiService {
-  async uploadPDF(file, onUploadProgress) {
+  async uploadPDF(file, workspaceId, onUploadProgress) {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('workspace_id', workspaceId);
     
     return this.request('POST', '/upload', formData, {
       headers: {
@@ -82,8 +83,8 @@ class PDFService extends BaseApiService {
     });
   }
 
-  async getStatus() {
-    return this.request('GET', '/status');
+  async getStatus(workspaceId = 'default') {
+    return this.request('GET', '/status', null, { params: { workspace_id: workspaceId } });
   }
 
   async getHealth() {
@@ -95,10 +96,11 @@ class PDFService extends BaseApiService {
  * ChatService - Manages chat dialogue and conversational context retrieval.
  */
 class ChatService extends BaseApiService {
-  async askQuestion(question, sessionId = null) {
+  async askQuestion(question, sessionId = null, workspaceId = 'default') {
     return this.request('POST', '/chat', {
       question,
       session_id: sessionId,
+      workspace_id: workspaceId,
     });
   }
 
