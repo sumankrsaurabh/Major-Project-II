@@ -16,7 +16,7 @@ comprehensive_service = ComprehensiveAnalysisService()
 qa_service = AdvancedQAService(comprehensive_service)
 
 # Create router
-router = APIRouter(prefix="/api/analysis", tags=["Analysis"])
+router = APIRouter(prefix="/analysis", tags=["Analysis"])
 
 
 # Request/Response Models
