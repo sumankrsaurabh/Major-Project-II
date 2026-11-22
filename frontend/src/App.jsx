@@ -102,6 +102,7 @@ function App() {
         id: `ai-${Date.now()}`,
         role: 'assistant',
         text: answerText,
+        citations: Array.isArray(response?.citations) ? response.citations : [],
       }
       setChatHistory((history) => [...history, assistantMessage])
     } catch (error) {
@@ -220,6 +221,18 @@ function App() {
                       <div key={message.id} className={`chat-message ${message.role}`}>
                         <span className="message-author">{message.role === 'user' ? 'You' : 'AI'}</span>
                         <p>{message.text}</p>
+                        {message.role === 'assistant' && message.citations?.length > 0 && (
+                          <div className="message-citations" aria-label="Answer sources">
+                            <span className="citations-heading">Sources</span>
+                            {message.citations.map((citation) => (
+                              <span className="citation-chip" key={citation.citation_id}>
+                                <strong>{citation.citation_id}</strong>
+                                <span>{citation.filename}</span>
+                                <span>{citation.page_number ? `Page ${citation.page_number}` : 'Page unavailable'}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))
                   ) : (
