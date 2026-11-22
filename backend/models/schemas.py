@@ -7,6 +7,7 @@ SESSION_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 
 
 class QueryRequest(BaseModel):
+    workspace_id: str = Field("default", min_length=1, max_length=64, pattern=SESSION_ID_PATTERN)
     question: str = Field(..., min_length=1, max_length=500)
     session_id: Optional[str] = Field(None, min_length=1, max_length=64, pattern=SESSION_ID_PATTERN, description="Opaque session identifier")
 
