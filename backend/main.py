@@ -20,7 +20,10 @@ from core.vector_store import (
     create_vector_store, delete_workspace_document, list_workspace_documents,
     load_vector_store, validate_document_id, validate_workspace_id,
 )
-from models.schemas import (\n    ChatResponse, ClearConversationRequest, DeleteDocumentResponse, HealthResponse,\n    QueryRequest, StatusResponse, UploadResponse,\n)
+from models.schemas import (
+    ChatResponse, ClearConversationRequest, ClearConversationResponse, DeleteDocumentResponse, HealthResponse,
+    QueryRequest, StatusResponse, UploadResponse,
+)
 from routes.analysis_routes import router as analysis_router
 from services.embedding_service import get_embedding_model
 from services.llm_service import get_llm
@@ -194,7 +197,7 @@ async def chat(req: QueryRequest):
         raise HTTPException(status_code=500, detail="Unable to generate an answer. Check server logs.")
 
 
-@app.post("/clear-conversation")
+@app.post("/clear-conversation", response_model=ClearConversationResponse)
 async def clear_conversation_endpoint(req: ClearConversationRequest):
     try:
         return clear_conversation(req.session_id)
@@ -232,7 +235,7 @@ app.add_api_route("/api/v1/health", health, methods=["GET"], response_model=Heal
 app.add_api_route("/api/v1/documents/upload", upload, methods=["POST"], response_model=UploadResponse, tags=["API v1"])
 app.add_api_route("/api/v1/workspaces/{workspace_id}/documents/{document_id}", delete_document, methods=["DELETE"], response_model=DeleteDocumentResponse, tags=["API v1"])
 app.add_api_route("/api/v1/chat", chat, methods=["POST"], response_model=ChatResponse, tags=["API v1"])
-app.add_api_route("/api/v1/conversations/clear", clear_conversation_endpoint, methods=["POST"], tags=["API v1"])
+app.add_api_route("/api/v1/conversations/clear", clear_conversation_endpoint, methods=["POST"], response_model=ClearConversationResponse, tags=["API v1"])
 app.add_api_route("/api/v1/workspaces/{workspace_id}/status", status_v1, methods=["GET"], response_model=StatusResponse, tags=["API v1"])
 
 
