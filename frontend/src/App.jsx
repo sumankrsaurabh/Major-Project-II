@@ -13,17 +13,33 @@ const initialStatus = {
   models_loaded: false,
 }
 
-function App() {
-  const [workspaceId] = useState(() => {
-    const storageKey = 'yuktara.chatwithpdf.workspace.v1'
-    let id = window.localStorage.getItem(storageKey)
-    if (!id) {
-      id = window.crypto.randomUUID()
-      window.localStorage.setItem(storageKey, id)
-    }
+function createClientId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID()
+  if (window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(16)
+    window.crypto.getRandomValues(bytes)
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')
+  }
+  return `client-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function getWorkspaceId() {
+  const storageKey = 'yuktara.chatwithpdf.workspace.v1'
+  try {
+    const existing = window.localStorage.getItem(storageKey)
+    if (existing && /^[A-Za-z0-9_-]{1,64}$/.test(existing)) return existing
+    const id = createClientId()
+    window.localStorage.setItem(storageKey, id)
     return id
-  })
-  const [sessionId] = useState(() => window.crypto.randomUUID())
+  } catch {
+    // Private browsing or storage policy may block localStorage.
+    return createClientId()
+  }
+}
+
+function App() {
+  const [workspaceId] = useState(getWorkspaceId)
+  const [sessionId] = useState(createClientId)
   const [activeTab, setActiveTab] = useState('upload')
   const [pdfStatus, setPdfStatus] = useState(initialStatus)
   const [chatQuery, setChatQuery] = useState('')
