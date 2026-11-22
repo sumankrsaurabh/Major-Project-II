@@ -24,7 +24,7 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q backend
       - name: Install backend test dependencies
-        run: python -m pip install 'pydantic>=2.0' pytest numpy httpx nltk
+        run: python -m pip install 'pydantic>=2.0' pytest numpy httpx nltk 'fastapi>=0.115' 'uvicorn[standard]>=0.30' python-multipart python-dotenv pdfplumber
       - name: Run backend schema tests
         env:
           PYTHONPATH: backend
