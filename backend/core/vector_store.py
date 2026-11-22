@@ -193,6 +193,7 @@ def create_vector_store(
     workspace_id: str = "default",
     document_id: str = "legacy",
     filename: str = "Imported document",
+    chunk_metadata: list[dict] | None = None,
 ):
     """Append a document's chunks to the selected workspace index."""
     path = _workspace_path(workspace_id)
@@ -203,10 +204,17 @@ def create_vector_store(
         store = CustomVectorStore.load_local(str(path), get_embedding_model())
         if store is None:
             store = CustomVectorStore(get_embedding_model())
+        if chunk_metadata is not None and len(chunk_metadata) != len(chunks):
+            raise ValueError("Chunk metadata count must match the chunk count")
         documents = [
             NativeDocument(
                 page_content=chunk,
-                metadata={"document_id": document_id, "filename": filename, "chunk_index": index},
+                metadata={
+                    "document_id": document_id,
+                    "filename": filename,
+                    "chunk_index": index,
+                    **(chunk_metadata[index] if chunk_metadata is not None else {}),
+                },
             )
             for index, chunk in enumerate(chunks) if chunk.strip()
         ]
@@ -262,5 +270,5 @@ def load_vector_store(workspace_id: str = "default"):
 
 
 def clear_vector_store_cache():
-    with _store_lock:
-        _store_cache.clear()
+    """Compatibility no-op; indexes are intentionally never cached in process."""
+    return None
