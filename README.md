@@ -123,6 +123,10 @@ npm run dev
 
 The application is local-first, but privacy depends on deployment configuration, logs, model settings, and storage access. Do not use this prototype for sensitive or multi-user hosted workloads until the release blockers in the engineering roadmap are closed.
 
+## 📚 Legacy Prototype Feature Inventory
+
+> The following sections document older prototype endpoints and algorithm experiments. They are not a guarantee that every feature is exposed, accurate, or production-supported in the current build. Verify each endpoint and implementation before relying on it.
+
 ## 📚 Features Overview
 
 ### 1️⃣ Summarization (`/summarize`)
