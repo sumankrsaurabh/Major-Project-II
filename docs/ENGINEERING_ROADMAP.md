@@ -20,7 +20,7 @@ This roadmap is intentionally incremental. Existing functionality is not conside
 - [ ] Introduce validated application settings.
 - [x] Introduce versioned API v1 compatibility routes while preserving legacy route aliases.
 - [x] Add typed response models for core upload, status, chat, health, deletion, and conversation-clear operations.
-- [ ] Standardize machine-readable error codes and a consistent error envelope across all public routes.
+- [x] Standardize machine-readable error codes, a consistent error envelope, and request correlation IDs across the FastAPI application.
 - [ ] Create application/domain/infrastructure boundaries.
 - [ ] Move existing behavior behind use cases and adapters.
 - [ ] Add dependency injection and remove unnecessary global mutable state.
