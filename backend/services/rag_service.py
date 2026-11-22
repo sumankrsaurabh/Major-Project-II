@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import json
-from concurrent.futures import ThreadPoolExecutor
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -30,6 +30,8 @@ class ConversationManager:
     """Manage conversation history for context-aware responses"""
     
     def __init__(self, session_id: str):
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", session_id or ""):
+            raise ValueError("Invalid session identifier")
         self.session_id = session_id
         self.history_file = Path(CONVERSATION_HISTORY_PATH) / f"{session_id}.json"
         self.messages = self._load_history()
@@ -205,10 +207,10 @@ Provide a clear and accurate answer:"""
             "confidence": confidence
         }
 
-    except Exception as e:
-        logger.error(f"Answer generation error: {e}")
+    except Exception:
+        logger.exception("Answer generation failed")
         return {
-            "answer": f"Error generating answer: {str(e)}",
+            "answer": "Unable to generate an answer. Check server logs.",
             "status": "error"
         }
 
@@ -218,21 +220,13 @@ async def generate_answer_async(query: str, session_id: Optional[str] = None):
     Asynchronous answer generation
     Runs in thread pool for non-blocking operation
     """
-    loop = asyncio.get_event_loop()
-    executor = ThreadPoolExecutor(max_workers=4)
-    
     try:
-        result = await loop.run_in_executor(
-            executor,
-            generate_answer,
-            query,
-            session_id
-        )
+        result = await asyncio.to_thread(generate_answer, query, session_id)
         return result
-    except Exception as e:
-        logger.error(f"Async answer generation error: {e}")
+    except Exception:
+        logger.exception("Asynchronous answer generation failed")
         return {
-            "answer": f"Error: {str(e)}",
+            "answer": "Unable to generate an answer. Check server logs.",
             "status": "error"
         }
 
