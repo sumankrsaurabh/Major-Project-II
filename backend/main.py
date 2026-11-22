@@ -10,8 +10,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile\nfrom fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware\nfrom starlette.exceptions import HTTPException as StarletteHTTPException\nfrom starlette.responses import JSONResponse
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import JSONResponse
 
 from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_FILE_SIZE
 from core.nlp_processor import AdvancedTokenizer
