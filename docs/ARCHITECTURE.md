@@ -178,7 +178,7 @@ Vector indexes must be scoped by user/workspace. Store index metadata including 
 
 ## 8. API conventions
 
-- Version public endpoints under `/api/v1`; preserve current routes temporarily through compatibility adapters.
+- Version public endpoints under `/api/v1`; preserve current routes temporarily through compatibility adapters. Core document, chat, health, and workspace-status operations now have versioned aliases; analysis routes are mounted under both legacy and versioned prefixes.
 - Use Pydantic request/response schemas for every public endpoint.
 - Return consistent error objects with stable machine-readable codes and safe human-readable messages.
 - Use pagination for document and conversation lists.
@@ -203,7 +203,7 @@ Vector indexes must be scoped by user/workspace. Store index metadata including 
 ## 10. Runtime and operations
 
 - Separate liveness from readiness. Liveness checks the process; readiness checks required dependencies and model availability.
-- Load heavy models lazily or in an explicit startup phase with observable status.
+- Load heavy models lazily or in an explicit startup phase with observable status. Never download NLP corpora as an import side effect; missing optional corpora must produce an offline fallback or a clear readiness error.
 - Configure worker count, upload size, model name, storage path, and timeouts via validated settings.
 - Use structured logs with request ID, operation, duration, and safe error code.
 - Never log document contents, user prompts, credentials, or full filesystem paths.
