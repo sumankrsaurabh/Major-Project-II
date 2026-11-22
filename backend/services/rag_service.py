@@ -204,7 +204,16 @@ Provide a clear and accurate answer:"""
         llm = get_llm()
         response = llm.invoke(prompt)
         answer = response.content if hasattr(response, 'content') else str(response)
-        
+        # Do not let a model fabricate citation IDs that were not retrieved.
+        allowed_citation_ids = {source["citation_id"] for source in citations}
+        answer = re.sub(
+            r"\\[(S\\d+)\\]",
+            lambda match: match.group(0)
+            if match.group(1) in allowed_citation_ids
+            else "[source unavailable]",
+            answer,
+        )
+
         # Clean up answer if it has redundant prefixes from LLM
         answer = answer.replace("According to your document (analyzed natively via TF-IDF):\n\n", "")
 
