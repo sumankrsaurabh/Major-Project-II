@@ -13,7 +13,33 @@ const initialStatus = {
   models_loaded: false,
 }
 
+function createClientId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID()
+  if (window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(16)
+    window.crypto.getRandomValues(bytes)
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')
+  }
+  return `client-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function getWorkspaceId() {
+  const storageKey = 'yuktara.chatwithpdf.workspace.v1'
+  try {
+    const existing = window.localStorage.getItem(storageKey)
+    if (existing && /^[A-Za-z0-9_-]{1,64}$/.test(existing)) return existing
+    const id = createClientId()
+    window.localStorage.setItem(storageKey, id)
+    return id
+  } catch {
+    // Private browsing or storage policy may block localStorage.
+    return createClientId()
+  }
+}
+
 function App() {
+  const [workspaceId] = useState(getWorkspaceId)
+  const [sessionId] = useState(createClientId)
   const [activeTab, setActiveTab] = useState('upload')
   const [pdfStatus, setPdfStatus] = useState(initialStatus)
   const [chatQuery, setChatQuery] = useState('')
@@ -24,8 +50,8 @@ function App() {
   useEffect(() => {
     const loadStatus = async () => {
       try {
-        const response = await pdfService.getStatus()
-        if (response && response.status === 'success') {
+        const response = await pdfService.getStatus(workspaceId)
+        if (response && response.server_status) {
           setPdfStatus((prev) => ({
             ...prev,
             ...response,
@@ -43,7 +69,7 @@ function App() {
     }
 
     loadStatus()
-  }, [])
+  }, [workspaceId])
 
   const handleUploadSuccess = (status) => {
     if (status) {
@@ -70,12 +96,13 @@ function App() {
     setIsChatLoading(true)
 
     try {
-      const response = await chatService.askQuestion(text)
+      const response = await chatService.askQuestion(text, sessionId, workspaceId)
       const answerText = response?.answer || response?.message || response?.data || 'No answer available.'
       const assistantMessage = {
         id: `ai-${Date.now()}`,
         role: 'assistant',
         text: answerText,
+        citations: Array.isArray(response?.citations) ? response.citations : [],
       }
       setChatHistory((history) => [...history, assistantMessage])
     } catch (error) {
@@ -167,7 +194,7 @@ function App() {
           </div>
 
           {activeTab === 'upload' && (
-            <FileUpload pdfStatus={pdfStatus} setPdfStatus={setPdfStatus} onUploadSuccess={handleUploadSuccess} />
+            <FileUpload workspaceId={workspaceId} pdfStatus={pdfStatus} setPdfStatus={setPdfStatus} onUploadSuccess={handleUploadSuccess} />
           )}
 
           {activeTab === 'chat' && (
@@ -194,6 +221,18 @@ function App() {
                       <div key={message.id} className={`chat-message ${message.role}`}>
                         <span className="message-author">{message.role === 'user' ? 'You' : 'AI'}</span>
                         <p>{message.text}</p>
+                        {message.role === 'assistant' && message.citations?.length > 0 && (
+                          <div className="message-citations" aria-label="Answer sources">
+                            <span className="citations-heading">Sources</span>
+                            {message.citations.map((citation) => (
+                              <span className="citation-chip" key={citation.citation_id}>
+                                <strong>{citation.citation_id}</strong>
+                                <span>{citation.filename}</span>
+                                <span>{citation.page_number ? `Page ${citation.page_number}` : 'Page unavailable'}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))
                   ) : (

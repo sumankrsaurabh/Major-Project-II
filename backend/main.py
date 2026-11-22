@@ -1,250 +1,333 @@
+import asyncio
+import logging
 import os
 import uuid
-import logging
-import asyncio
-import shutil
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
-from core.pdf_processor import extract_text_async
-from core.vector_store import create_vector_store, load_vector_store
-from core.nlp_processor import AdvancedTokenizer
-from services.rag_service import generate_answer_async, clear_conversation
-from services.embedding_service import get_embedding_model
-from services.llm_service import get_llm
-from models.schemas import QueryRequest, UploadProgress
-from routes.analysis_routes import router as analysis_router
-from config import MAX_FILE_SIZE, CHUNK_SIZE, CHUNK_OVERLAP
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Load environment variables
 load_dotenv()
 
-# Global state for pre-loaded models
-app_state = {
-    "embedding_model": None,
-    "llm_model": None,
-    "models_loaded": False
-}
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import JSONResponse
 
-# Temporary upload directory
-UPLOAD_DIR = Path("temp_uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_FILE_SIZE
+from core.nlp_processor import AdvancedTokenizer
+from core.pdf_processor import extract_pages_async
+from core.vector_store import (
+    create_vector_store, delete_workspace_document, list_workspace_documents,
+    load_vector_store, validate_document_id, validate_workspace_id,
+)
+from models.schemas import (
+    ChatResponse, ClearConversationRequest, ClearConversationResponse, DeleteDocumentResponse, HealthResponse,
+    ErrorResponse, QueryRequest, StatusResponse, UploadResponse,
+)
+from routes.analysis_routes import router as analysis_router
+from services.embedding_service import get_embedding_model
+from services.llm_service import get_llm
+from services.rag_service import clear_conversation, generate_answer_async
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+logger = logging.getLogger(__name__)
+
+app_state = {"embedding_model": None, "llm_model": None, "models_loaded": False}
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "temp_uploads"))
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Startup: Load models on server start
-    Shutdown: Cleanup resources
-    """
-    # Startup
-    logger.info("🚀 Starting server - Loading models...")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info("Starting ChatWithPDF services")
     try:
-        # Load embedding model
-        logger.info("📊 Loading embedding model...")
         app_state["embedding_model"] = get_embedding_model()
-        logger.info("✓ Embedding model loaded")
-        
-        # Load LLM
-        logger.info("🤖 Loading LLM model...")
         app_state["llm_model"] = get_llm()
-        logger.info("✓ LLM model loaded")
-        
+        readiness_check = getattr(app_state["llm_model"], "check_ready", None)
+        if readiness_check and not readiness_check():
+            raise RuntimeError("Configured local generative model is not available in Ollama")
         app_state["models_loaded"] = True
-        logger.info("✅ All models loaded successfully!")
-    except Exception as e:
-        logger.error(f"❌ Error loading models: {e}")
+        logger.info("AI services initialized")
+    except Exception:
         app_state["models_loaded"] = False
-    
+        logger.exception("AI service initialization failed")
     yield
-    
-    # Shutdown
-    logger.info("🛑 Shutting down server...")
-    # Cleanup temporary uploads
-    if UPLOAD_DIR.exists():
-        shutil.rmtree(UPLOAD_DIR)
-    logger.info("✓ Cleanup complete")
+    app_state.update(embedding_model=None, llm_model=None, models_loaded=False)
+    # Do not delete the shared upload directory on shutdown: another worker may
+    # still be processing a request. Each request owns and removes its own temp file.
 
 
 app = FastAPI(
-    title="ChatWithPDF RAG System",
-    description="AI-powered PDF Q&A with RAG - Async Support",
-    version="2.0",
-    lifespan=lifespan
+    title="ChatWithPDF",
+    description="Local-first document question answering",
+    version="2.1.0",
+    lifespan=lifespan,
 )
 
-# Apply CORS middleware
+ERROR_RESPONSES = {
+    code: {"model": ErrorResponse, "description": "Standard API error envelope"}
+    for code in (400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503)
+}
+
+
+
+@app.middleware("http")
+async def attach_request_id(request: Request, call_next):
+    request_id = uuid.uuid4().hex
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+def _error_code(status_code: int) -> str:
+    return {
+        400: "bad_request",
+        401: "unauthorized",
+        403: "forbidden",
+        404: "not_found",
+        409: "conflict",
+        413: "payload_too_large",
+        415: "unsupported_media_type",
+        422: "validation_error",
+        429: "rate_limited",
+        503: "service_unavailable",
+    }.get(status_code, "request_failed" if status_code < 500 else "internal_error")
+
+
+def _error_response(request: Request, status_code: int, code: str, message: str, headers=None):
+    request_id = getattr(request.state, "request_id", "unavailable")
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": message,
+                "request_id": request_id,
+            }
+        },
+        headers=headers,
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def handle_http_exception(request: Request, exc: StarletteHTTPException):
+    message = exc.detail if isinstance(exc.detail, str) else "The request could not be completed"
+    return _error_response(
+        request, exc.status_code, _error_code(exc.status_code), message, exc.headers
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_exception(request: Request, exc: RequestValidationError):
+    return _error_response(
+        request, 422, "validation_error", "Request validation failed"
+    )
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_exception(request: Request, exc: Exception):
+    logger.exception(
+        "Unhandled API exception",
+        extra={"request_id": getattr(request.state, "request_id", "unavailable")},
+    )
+    return _error_response(
+        request, 500, "internal_error", "An unexpected server error occurred"
+    )
+
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-# Include analysis routes
-app.include_router(analysis_router)
+app.include_router(analysis_router, prefix="/api", responses=ERROR_RESPONSES)
+app.include_router(analysis_router, prefix="/api/v1", responses=ERROR_RESPONSES)
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse, responses=ERROR_RESPONSES)
 async def health():
-    """Health check endpoint"""
     return {
         "status": "ok",
         "models_loaded": app_state["models_loaded"],
         "embedding_model": app_state["embedding_model"] is not None,
-        "llm_model": app_state["llm_model"] is not None
+        "llm_model": app_state["llm_model"] is not None,
+        "answer_engine": getattr(app_state["llm_model"], "model_name", "unavailable"),
+        "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
     }
 
 
-@app.post("/upload")
-async def upload(file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()):
-    """
-    Upload and process PDF file with support for large files
-    Supports files up to MAX_FILE_SIZE
-    """
+@app.post("/upload", response_model=UploadResponse, responses=ERROR_RESPONSES)
+async def upload(file: UploadFile = File(...), workspace_id: str = Form("default")):
     if not app_state["models_loaded"]:
-        raise HTTPException(500, "Models not loaded. Server may still be initializing.")
-    
-    # Validate file type
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(400, "Only PDF files allowed")
-    
-    # Create unique temp file
-    temp_filename = f"{uuid.uuid4().hex}.pdf"
-    temp_path = UPLOAD_DIR / temp_filename
-    
+        raise HTTPException(status_code=503, detail="AI services are not ready")
     try:
-        # Read file content
-        file_content = await file.read()
-        file_size = len(file_content)
-        
-        # Check file size limit
-        if file_size > MAX_FILE_SIZE:
-            raise HTTPException(
-                413,
-                f"File too large. Maximum size: {MAX_FILE_SIZE / (1024**2):.0f}MB"
-            )
-        
-        # Write file to disk
-        with open(temp_path, "wb") as f:
-            f.write(file_content)
-        
-        logger.info(f"📄 Processing PDF: {file.filename} ({file_size / (1024**2):.2f}MB)")
-        
-        # Extract text asynchronously
-        text = await extract_text_async(str(temp_path))
-        
-        if not text.strip():
-            raise HTTPException(400, "No text extracted from PDF")
-        
-        # Create chunks
-        logger.info(f"📋 Creating chunks (size: {CHUNK_SIZE}, overlap: {CHUNK_OVERLAP})...")
+        workspace_id = validate_workspace_id(workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace identifier")
+
+    filename = Path(file.filename or "").name
+    if Path(filename).suffix.lower() != ".pdf":
+        raise HTTPException(status_code=415, detail="Only PDF files are supported")
+
+    temp_path = UPLOAD_DIR / f"{uuid.uuid4().hex}.pdf"
+    file_size = 0
+    header = bytearray()
+
+    try:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        with temp_path.open("wb") as output:
+            while chunk := await file.read(UPLOAD_CHUNK_SIZE):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File exceeds the {MAX_FILE_SIZE // (1024 * 1024)} MB upload limit",
+                    )
+                if len(header) < 1024:
+                    header.extend(chunk[: 1024 - len(header)])
+                output.write(chunk)
+
+        if b"%PDF-" not in header:
+            raise HTTPException(status_code=415, detail="The uploaded file is not a valid PDF")
+
+        logger.info("Processing PDF upload (%s bytes)", file_size)
+        extracted_pages = await extract_pages_async(str(temp_path))
+        if not extracted_pages:
+            raise HTTPException(status_code=422, detail="No extractable text found in the PDF")
+
         tokenizer = AdvancedTokenizer()
-        chunks = tokenizer.chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
-        
-        logger.info(f"✓ Created {len(chunks)} chunks")
-        
-        # Create vector store
-        logger.info("🔍 Building vector store...")
-        await asyncio.to_thread(create_vector_store, chunks)
-        logger.info("✓ Vector store created successfully")
-        
-        # Schedule cleanup
-        background_tasks.add_task(cleanup_temp_file, temp_path)
-        
+        chunks = []
+        chunk_metadata = []
+        for page in extracted_pages:
+            page_chunks = tokenizer.chunk_text(page["text"], CHUNK_SIZE, CHUNK_OVERLAP)
+            for page_chunk_index, chunk in enumerate(page_chunks):
+                chunks.append(chunk)
+                chunk_metadata.append({
+                    "page_number": page["page_number"],
+                    "page_chunk_index": page_chunk_index,
+                })
+        if not chunks:
+            raise HTTPException(status_code=422, detail="The PDF did not produce any indexable text")
+
+        document_id = uuid.uuid4().hex
+        await asyncio.to_thread(
+            create_vector_store, chunks, workspace_id, document_id, filename, chunk_metadata
+        )
         return {
             "message": "PDF processed successfully",
-            "filename": file.filename,
+            "document_id": document_id,
+            "workspace_id": workspace_id,
+            "filename": filename,
             "chunks": len(chunks),
             "file_size_mb": round(file_size / (1024**2), 2),
-            "status": "ready"
+            "status": "ready",
         }
-    
     except HTTPException:
-        # Clean up on HTTP errors
-        if temp_path.exists():
-            temp_path.unlink()
         raise
-    
-    except Exception as e:
-        logger.error(f"Upload error: {e}")
-        if temp_path.exists():
-            temp_path.unlink()
-        raise HTTPException(500, f"Upload failed: {str(e)}")
+    except Exception:
+        logger.exception("PDF upload or processing failed")
+        raise HTTPException(status_code=500, detail="PDF processing failed. Check server logs.")
+    finally:
+        await file.close()
+        temp_path.unlink(missing_ok=True)
 
 
-@app.post("/chat")
+@app.delete("/workspaces/{workspace_id}/documents/{document_id}", response_model=DeleteDocumentResponse, responses=ERROR_RESPONSES)
+async def delete_document(workspace_id: str, document_id: str):
+    try:
+        workspace_id = validate_workspace_id(workspace_id)
+        document_id = validate_document_id(document_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace or document identifier")
+
+    deleted = await asyncio.to_thread(delete_workspace_document, workspace_id, document_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found in this workspace")
+    return {
+        "status": "deleted",
+        "document_id": document_id,
+        "documents": list_workspace_documents(workspace_id),
+    }
+
+
+@app.post("/chat", response_model=ChatResponse, responses=ERROR_RESPONSES)
 async def chat(req: QueryRequest):
-    """
-    Process question and generate answer asynchronously with context awareness
-    Supports conversation history and session tracking
-    """
     if not app_state["models_loaded"]:
-        raise HTTPException(500, "Models not loaded")
-    
-    store = load_vector_store()
-    if not store:
-        raise HTTPException(400, "No PDF uploaded. Please upload a PDF first.")
-    
+        raise HTTPException(status_code=503, detail="AI services are not ready")
     try:
-        logger.info(f"❓ Question: {req.question}")
-        if req.session_id:
-            logger.info(f"📌 Session: {req.session_id}")
-        
-        answer_data = await generate_answer_async(req.question, req.session_id)
-        logger.info(f"✓ Answer generated ({len(answer_data['answer'])} chars)")
+        workspace_id = validate_workspace_id(req.workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace identifier")
+    if not load_vector_store(workspace_id):
+        raise HTTPException(status_code=409, detail="No PDF has been indexed in this workspace")
+
+    try:
+        answer_data = await generate_answer_async(req.question, req.session_id, workspace_id)
+        if answer_data.get("status") == "error":
+            raise HTTPException(status_code=500, detail="Unable to generate an answer. Check server logs.")
+        logger.info("Chat response generated (%s characters)", len(answer_data.get("answer", "")))
         return answer_data
-    
-    except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(500, f"Failed to generate answer: {str(e)}")
+    except Exception:
+        logger.exception("Chat request failed")
+        raise HTTPException(status_code=500, detail="Unable to generate an answer. Check server logs.")
 
 
-@app.post("/clear-conversation")
-async def clear_conversation_endpoint(req):
-    """Clear conversation history for a session"""
+@app.post("/clear-conversation", response_model=ClearConversationResponse, responses=ERROR_RESPONSES)
+async def clear_conversation_endpoint(req: ClearConversationRequest):
     try:
-        session_id = req.get("session_id") if isinstance(req, dict) else req.session_id
-        result = clear_conversation(session_id)
-        return result
-    except Exception as e:
-        logger.error(f"Clear conversation error: {e}")
-        raise HTTPException(500, f"Failed to clear conversation: {str(e)}")
+        workspace_id = validate_workspace_id(req.workspace_id)
+        return clear_conversation(req.session_id, workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace identifier")
+    except Exception:
+        logger.exception("Conversation cleanup failed")
+        raise HTTPException(status_code=500, detail="Unable to clear conversation")
 
 
-@app.get("/status")
-async def status():
-    """Get system status"""
-    store = load_vector_store()
+@app.get("/status", response_model=StatusResponse, responses=ERROR_RESPONSES)
+async def status(workspace_id: str = Query("default", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")):
+    try:
+        workspace_id = validate_workspace_id(workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace identifier")
+    store = load_vector_store(workspace_id)
     return {
         "server_status": "running",
         "models_loaded": app_state["models_loaded"],
         "pdf_uploaded": store is not None,
-        "embedding_model": "custom-native-embeddings",
-        "llm_model": "custom-native-v1",
-        "max_file_size_mb": MAX_FILE_SIZE / (1024**2)
+        "documents": list_workspace_documents(workspace_id),
+        "embedding_model": getattr(app_state["embedding_model"], "model_name", "unavailable"),
+        "llm_model": getattr(app_state["llm_model"], "model_name", "unavailable"),
+        "answer_engine": getattr(app_state["llm_model"], "model_name", "unavailable"),
+        "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
+        "max_file_size_mb": MAX_FILE_SIZE / (1024**2),
     }
 
 
+# Versioned API surface. Existing routes remain as compatibility aliases during migration.
+async def status_v1(workspace_id: str):
+    return await status(workspace_id)
 
-async def cleanup_temp_file(file_path: Path):
-    """Cleanup temporary file"""
-    await asyncio.sleep(60)  # Wait 60 seconds before cleanup
-    if file_path.exists():
-        file_path.unlink()
-        logger.info(f"🗑️ Cleaned up temp file: {file_path.name}")
+
+app.add_api_route("/api/v1/health", health, methods=["GET"], response_model=HealthResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/documents/upload", upload, methods=["POST"], response_model=UploadResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/workspaces/{workspace_id}/documents/{document_id}", delete_document, methods=["DELETE"], response_model=DeleteDocumentResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/chat", chat, methods=["POST"], response_model=ChatResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/conversations/clear", clear_conversation_endpoint, methods=["POST"], response_model=ClearConversationResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/workspaces/{workspace_id}/status", status_v1, methods=["GET"], response_model=StatusResponse, responses=ERROR_RESPONSES, tags=["API v1"])
 
 
 if __name__ == "__main__":

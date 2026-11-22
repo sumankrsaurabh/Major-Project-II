@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { 
   FileUp, 
   FileText, 
@@ -8,11 +8,12 @@ import {
   HardDrive,
   Cpu,
   Layers,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { pdfService } from '../services/api';
 
-export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess }) {
+export default function FileUpload({ workspaceId, pdfStatus, setPdfStatus, onUploadSuccess }) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadState, setUploadState] = useState('idle'); // idle, uploading, processing, success, error
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -31,16 +32,17 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
   };
 
   const processFile = async (file) => {
-    if (!file.name.endsWith('.pdf')) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
       setErrorMsg('Invalid file format. Please upload a PDF file only.');
       setUploadState('error');
       return;
     }
 
-    // 500 MB limit configured on backend
-    const limitBytes = 500 * 1024 * 1024;
+    // The server publishes its configured limit through /status.
+    const maxFileSizeMb = Number(pdfStatus?.max_file_size_mb) || 500;
+    const limitBytes = maxFileSizeMb * 1024 * 1024;
     if (file.size > limitBytes) {
-      setErrorMsg('File size exceeds the 500MB limit.');
+      setErrorMsg(`File size exceeds the ${maxFileSizeMb}MB limit.`);
       setUploadState('error');
       return;
     }
@@ -51,7 +53,7 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
     setErrorMsg('');
 
     try {
-      const response = await pdfService.uploadPDF(file, (progressEvent) => {
+      const response = await pdfService.uploadPDF(file, workspaceId, (progressEvent) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         setUploadProgress(percentCompleted);
         if (percentCompleted === 100) {
@@ -79,6 +81,23 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
     } catch (error) {
       console.error(error);
       setErrorMsg(error.message || 'An error occurred during file upload or processing.');
+      setUploadState('error');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId) => {
+    try {
+      const response = await pdfService.deleteDocument(workspaceId, documentId);
+      const documents = response.documents || [];
+      setPdfStatus((previous) => ({
+        ...previous,
+        documents,
+        pdf_uploaded: documents.length > 0,
+        filename: documents.at(-1)?.filename || 'No file uploaded',
+        chunks: documents.reduce((total, item) => total + item.chunks, 0),
+      }));
+    } catch (error) {
+      setErrorMsg(error.message || 'Unable to delete document.');
       setUploadState('error');
     }
   };
@@ -180,7 +199,7 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
               </div>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>Drag & Drop PDF Here</h3>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-                or click to browse files (limit 500MB)
+                or click to browse files (limit {Number(pdfStatus?.max_file_size_mb) || 500}MB)
               </p>
               <div style={{
                 fontSize: '0.75rem',
@@ -367,6 +386,34 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
                 </div>
               </div>
             </div>
+
+            {Array.isArray(pdfStatus.documents) && pdfStatus.documents.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 650 }}>Workspace documents</h4>
+                {pdfStatus.documents.map((document) => (
+                  <div key={document.document_id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: '0.75rem', padding: '0.65rem', border: '1px solid var(--border-light)',
+                    borderRadius: 'var(--radius-md)'
+                  }}>
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{document.filename}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{document.chunks} chunks</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      aria-label={`Delete ${document.filename}`}
+                      title="Delete document"
+                      onClick={(event) => { event.stopPropagation(); handleDeleteDocument(document.document_id); }}
+                      style={{ padding: '0.45rem', flexShrink: 0 }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div style={{
               marginTop: 'auto',

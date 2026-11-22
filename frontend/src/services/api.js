@@ -21,7 +21,13 @@ class HttpClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
-        const errorMsg = error.response?.data?.detail || error.message || 'An unexpected error occurred';
+        const errorPayload = error.response?.data?.error;
+        const baseMessage = errorPayload?.message
+          || error.response?.data?.detail
+          || error.message
+          || 'An unexpected error occurred';
+        const requestId = errorPayload?.request_id || error.response?.headers?.['x-request-id'];
+        const errorMsg = requestId ? `${baseMessage} (Request ID: ${requestId})` : baseMessage;
         console.error('API Error:', errorMsg);
         return Promise.reject(new Error(errorMsg));
       }
@@ -70,11 +76,12 @@ class BaseApiService {
  * PDFService - Handles operations related to PDF document upload and status.
  */
 class PDFService extends BaseApiService {
-  async uploadPDF(file, onUploadProgress) {
+  async uploadPDF(file, workspaceId, onUploadProgress) {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('workspace_id', workspaceId);
     
-    return this.request('POST', '/upload', formData, {
+    return this.request('POST', '/api/v1/documents/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -82,12 +89,16 @@ class PDFService extends BaseApiService {
     });
   }
 
-  async getStatus() {
-    return this.request('GET', '/status');
+  async getStatus(workspaceId = 'default') {
+    return this.request('GET', `/api/v1/workspaces/${workspaceId}/status`);
   }
 
   async getHealth() {
-    return this.request('GET', '/health');
+    return this.request('GET', '/api/v1/health');
+  }
+
+  async deleteDocument(workspaceId, documentId) {
+    return this.request('DELETE', `/api/v1/workspaces/${workspaceId}/documents/${documentId}`);
   }
 }
 
@@ -95,16 +106,18 @@ class PDFService extends BaseApiService {
  * ChatService - Manages chat dialogue and conversational context retrieval.
  */
 class ChatService extends BaseApiService {
-  async askQuestion(question, sessionId = null) {
-    return this.request('POST', '/chat', {
+  async askQuestion(question, sessionId = null, workspaceId = 'default') {
+    return this.request('POST', '/api/v1/chat', {
       question,
       session_id: sessionId,
+      workspace_id: workspaceId,
     });
   }
 
-  async clearConversation(sessionId) {
-    return this.request('POST', '/clear-conversation', {
+  async clearConversation(sessionId, workspaceId = 'default') {
+    return this.request('POST', '/api/v1/conversations/clear', {
       session_id: sessionId,
+      workspace_id: workspaceId,
     });
   }
 }
@@ -114,7 +127,7 @@ class ChatService extends BaseApiService {
  */
 class AnalysisService extends BaseApiService {
   async analyzeDocument(text, detailed = true) {
-    const response = await this.request('POST', '/api/analysis/document', {
+    const response = await this.request('POST', '/api/v1/analysis/document', {
       text,
       detailed,
     });
@@ -125,7 +138,7 @@ class AnalysisService extends BaseApiService {
   }
 
   async analyzeQuery(query) {
-    const response = await this.request('POST', '/api/analysis/query', {
+    const response = await this.request('POST', '/api/v1/analysis/query', {
       query,
     });
     if (response.status === 'success') {
@@ -135,7 +148,7 @@ class AnalysisService extends BaseApiService {
   }
 
   async extractInsights(text) {
-    const response = await this.request('POST', '/api/analysis/insights', {
+    const response = await this.request('POST', '/api/v1/analysis/insights', {
       text,
     });
     if (response.status === 'success') {
@@ -145,7 +158,7 @@ class AnalysisService extends BaseApiService {
   }
 
   async compareTexts(text1, text2) {
-    const response = await this.request('POST', '/api/analysis/compare', {
+    const response = await this.request('POST', '/api/v1/analysis/compare', {
       text1,
       text2,
     });
@@ -156,7 +169,7 @@ class AnalysisService extends BaseApiService {
   }
 
   async generateAnswer(question, context) {
-    const response = await this.request('POST', '/api/analysis/answer', {
+    const response = await this.request('POST', '/api/v1/analysis/answer', {
       question,
       context,
     });
@@ -167,7 +180,7 @@ class AnalysisService extends BaseApiService {
   }
 
   async getCapabilities() {
-    const response = await this.request('GET', '/api/analysis/capabilities');
+    const response = await this.request('GET', '/api/v1/analysis/capabilities');
     if (response.status === 'success') {
       return response.data;
     }

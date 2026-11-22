@@ -16,9 +16,9 @@ class NativeResponse:
 
 class ImprovedLLM:
     """
-    Improved local LLM using advanced NLP techniques.
-    Generates more accurate and coherent answers through better extraction and synthesis.
+    Extractive sentence-ranking engine. This is not a generative language model.
     """
+    provider = "extractive"
     def __init__(self, model_name: str = "improved-local-v2", temperature: float = 0.7):
         self.model_name = model_name
         self.temperature = temperature
@@ -152,20 +152,72 @@ class ImprovedLLM:
         return NativeResponse(response_text)
 
 
+
+class OllamaLLM:
+    provider = "ollama"
+    """Local generative model adapter using the Ollama chat HTTP API."""
+
+    def __init__(self, model_name: str, base_url: str, timeout: float = 120.0, temperature: float = 0.2):
+        import httpx
+
+        self.model_name = model_name
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self.temperature = temperature
+        self._httpx = httpx
+
+    def check_ready(self) -> bool:
+        response = self._httpx.post(
+            f"{self.base_url}/api/show",
+            json={"model": self.model_name},
+            timeout=min(self.timeout, 10.0),
+        )
+        return response.status_code == 200
+
+    def invoke(self, prompt: str) -> NativeResponse:
+        response = self._httpx.post(
+            f"{self.base_url}/api/chat",
+            json={
+                "model": self.model_name,
+                "stream": False,
+                "messages": [{"role": "user", "content": prompt}],
+                "options": {"temperature": self.temperature},
+            },
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        content = payload.get("message", {}).get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("The local model returned an empty response")
+        return NativeResponse(content.strip())
+
+
 _llm_instance = None
 
+
 def get_llm():
-    """Get or create LLM instance."""
+    """Select an explicitly configured local answer engine."""
     global _llm_instance
-    if not _llm_instance:
-        try:
-            _llm_instance = ImprovedLLM(
-                model_name="improved-local-v2",
-                temperature=0.7
-            )
-            logger.info("✅ ImprovedLLM initialized")
-        except Exception as e:
-            logger.error(f"Failed to load improved LLM: {e}")
-            raise Exception("No working LLM available")
-            
+    if _llm_instance is not None:
+        return _llm_instance
+
+    import os
+
+    provider = os.getenv("LLM_PROVIDER", "extractive").strip().lower()
+    if provider == "ollama":
+        model_name = os.getenv("OLLAMA_MODEL", "qwen2.5:3b").strip()
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").strip()
+        timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
+        temperature = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+        _llm_instance = OllamaLLM(model_name, base_url, timeout, temperature)
+        logger.info("Configured local Ollama generative model: %s", model_name)
+    elif provider == "extractive":
+        _llm_instance = ImprovedLLM(
+            model_name="extractive-tfidf-v2",
+            temperature=float(os.getenv("LLM_TEMPERATURE", "0.2")),
+        )
+        logger.warning("Using extractive TF-IDF answer engine; this is not a generative LLM")
+    else:
+        raise ValueError("Unsupported LLM_PROVIDER. Choose 'ollama' or 'extractive'.")
     return _llm_instance

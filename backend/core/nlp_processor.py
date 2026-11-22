@@ -11,28 +11,10 @@ import numpy as np
 from nltk.corpus import wordnet
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk import pos_tag, ne_chunk
-import nltk
 
 logger = logging.getLogger(__name__)
 
-# Download required NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-try:
-    nltk.data.find('taggers/averaged_perceptron_tagger')
-except LookupError:
-    nltk.download('averaged_perceptron_tagger')
-try:
-    nltk.data.find('chunkers/maxent_ne_chunker')
-except LookupError:
-    nltk.download('maxent_ne_chunker')
-try:
-    nltk.data.find('corpora/words')
-except LookupError:
-    nltk.download('words')
-
+# NLTK corpora are optional runtime assets. Never download them during import.
 
 class AdvancedTokenizer:
     """Advanced tokenization with multiple strategies"""
@@ -44,13 +26,18 @@ class AdvancedTokenizer:
     
     def tokenize_sentences(self, text: str) -> List[str]:
         """Split text into sentences"""
-        sentences = sent_tokenize(text)
+        try:
+            sentences = sent_tokenize(text)
+        except LookupError:
+            sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
         return [s.strip() for s in sentences if s.strip()]
     
     def tokenize_words(self, text: str) -> List[str]:
         """Tokenize into words"""
-        tokens = word_tokenize(text.lower())
-        return tokens
+        try:
+            return word_tokenize(text.lower())
+        except LookupError:
+            return self.word_pattern.findall(text.lower())
     
     def tokenize_ngrams(self, text: str, n: int = 2) -> List[Tuple[str, ...]]:
         """Generate n-grams"""
@@ -103,10 +90,14 @@ class Lemmatizer:
         if word in self.lemma_cache:
             return self.lemma_cache[word]
         
-        synsets = wordnet.synsets(word, pos=self._convert_pos(pos))
         lemma = word
-        if synsets:
-            lemma = synsets[0].lemmas()[0].name()
+        try:
+            synsets = wordnet.synsets(word, pos=self._convert_pos(pos))
+            if synsets:
+                lemma = synsets[0].lemmas()[0].name()
+        except LookupError:
+            # Return the surface form when optional WordNet data is unavailable.
+            pass
         
         self.lemma_cache[word] = lemma
         return lemma
@@ -139,7 +130,22 @@ class POSTagger:
     
     def tag_tokens(self, tokens: List[str]) -> List[Tuple[str, str]]:
         """Tag tokens with POS"""
-        return pos_tag(tokens)
+        try:
+            return pos_tag(tokens)
+        except LookupError:
+            # Lightweight fallback keeps local analysis available without downloaded tagger data.
+            tagged = []
+            for token in tokens:
+                if token.endswith(("ing", "ed")):
+                    tag = "VBG"
+                elif token.isdigit():
+                    tag = "CD"
+                elif token.endswith(("ous", "ful", "ive", "able")):
+                    tag = "JJ"
+                else:
+                    tag = "NN"
+                tagged.append((token, tag))
+            return tagged
     
     def get_pos_stats(self, tokens: List[str]) -> Dict[str, int]:
         """Get POS distribution"""
@@ -165,6 +171,12 @@ class NamedEntityRecognizer:
             'NUMBER': r'\b\d+(?:\.\d+)?\b',
         }
     
+    def _tokenize_words(self, text: str) -> List[str]:
+        try:
+            return word_tokenize(text)
+        except LookupError:
+            return re.findall(r'\b\w+\b', text)
+
     def recognize_entities(self, text: str) -> Dict[str, List[str]]:
         """Recognize named entities using patterns and NLTK"""
         entities = defaultdict(list)
@@ -175,15 +187,18 @@ class NamedEntityRecognizer:
             entities[entity_type].extend(matches)
         
         # NLTK-based NER
-        tokens = word_tokenize(text)
-        pos_tags = pos_tag(tokens)
-        ne_tree = ne_chunk(pos_tags)
-        
-        for subtree in ne_tree:
-            if hasattr(subtree, 'label'):
-                entity_type = subtree.label()
-                entity_text = ' '.join(word for word, tag in subtree.leaves())
-                entities[entity_type].append(entity_text)
+        tokens = self._tokenize_words(text)
+        try:
+            pos_tags = pos_tag(tokens)
+            ne_tree = ne_chunk(pos_tags)
+            for subtree in ne_tree:
+                if hasattr(subtree, 'label'):
+                    entity_type = subtree.label()
+                    entity_text = ' '.join(word for word, tag in subtree.leaves())
+                    entities[entity_type].append(entity_text)
+        except LookupError:
+            # Pattern-based entities above remain available without NLTK corpora.
+            pass
         
         # Remove duplicates
         return {k: list(set(v)) for k, v in entities.items()}
@@ -191,8 +206,11 @@ class NamedEntityRecognizer:
     def extract_entity_relations(self, text: str) -> List[Dict]:
         """Extract relationships between entities"""
         relations = []
-        tokens = word_tokenize(text)
-        pos_tags = pos_tag(tokens)
+        tokens = self._tokenize_words(text)
+        try:
+            pos_tags = pos_tag(tokens)
+        except LookupError:
+            pos_tags = POSTagger().tag_tokens(tokens)
         
         for i, (token, pos) in enumerate(pos_tags):
             if pos in ['NN', 'NNP']:  # Nouns

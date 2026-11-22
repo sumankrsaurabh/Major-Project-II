@@ -1,12 +1,12 @@
 import asyncio
 import logging
 import json
-from concurrent.futures import ThreadPoolExecutor
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
 
-from core.vector_store import load_vector_store
+from core.vector_store import load_vector_store, validate_workspace_id
 from services.llm_service import get_llm
 from config import (
     TOP_K, 
@@ -29,9 +29,15 @@ Path(CONVERSATION_HISTORY_PATH).mkdir(exist_ok=True)
 class ConversationManager:
     """Manage conversation history for context-aware responses"""
     
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, workspace_id: str = "default"):
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", session_id or ""):
+            raise ValueError("Invalid session identifier")
+        self.workspace_id = validate_workspace_id(workspace_id)
         self.session_id = session_id
-        self.history_file = Path(CONVERSATION_HISTORY_PATH) / f"{session_id}.json"
+        base_path = Path(CONVERSATION_HISTORY_PATH)
+        self.history_dir = base_path if self.workspace_id == "default" else base_path / "workspaces" / self.workspace_id
+        self.history_dir.mkdir(parents=True, exist_ok=True)
+        self.history_file = self.history_dir / f"{session_id}.json"
         self.messages = self._load_history()
     
     def _load_history(self) -> List[Dict]:
@@ -120,11 +126,11 @@ Hypothetical passage:"""
         return query
 
 
-def generate_answer(query: str, session_id: Optional[str] = None):
+def generate_answer(query: str, session_id: Optional[str] = None, workspace_id: str = "default"):
     """
     Synchronous answer generation with enhanced accuracy and better retrieval
     """
-    store = load_vector_store()
+    store = load_vector_store(workspace_id)
 
     if not store:
         return {"answer": "No document uploaded. Please upload a PDF first."}
@@ -133,7 +139,7 @@ def generate_answer(query: str, session_id: Optional[str] = None):
         # Initialize conversation manager if enabled
         conv_manager = None
         if CONVERSATION_ENABLED and session_id:
-            conv_manager = ConversationManager(session_id)
+            conv_manager = ConversationManager(session_id, workspace_id)
 
         # Retrieve relevant documents with increased count for better relevance
         logger.info(f"Retrieving {TOP_K} most relevant documents...")
@@ -150,11 +156,24 @@ def generate_answer(query: str, session_id: Optional[str] = None):
 
         # Build context from documents - improved formatting
         context_parts = []
-        for i, doc in enumerate(docs[:RERANK_TOP_K]):
-            # Include score in context for better relevance awareness
-            score = doc.metadata.get('score', 0) if hasattr(doc, 'metadata') else 0
-            context_parts.append(f"{doc.page_content}")
-        
+        citations = []
+        for index, doc in enumerate(docs[:RERANK_TOP_K], start=1):
+            metadata = getattr(doc, "metadata", {}) or {}
+            citation_id = f"S{index}"
+            source = {
+                "citation_id": citation_id,
+                "document_id": metadata.get("document_id"),
+                "filename": metadata.get("filename", "Imported document"),
+                "page_number": metadata.get("page_number"),
+                "chunk_index": metadata.get("chunk_index"),
+                "score": metadata.get("score"),
+            }
+            citations.append(source)
+            page_label = f"Page {source['page_number']}" if source["page_number"] else "Page unavailable"
+            context_parts.append(
+                f"[{citation_id} | {source['filename']} | {page_label}]\n{doc.page_content}"
+            )
+
         context = "\n\n".join(context_parts)
 
         # Build conversation context if enabled
@@ -171,8 +190,9 @@ Your instructions:
 1. Answer the question ONLY using information from the provided context
 2. If the exact answer isn't in the context, provide the most relevant information available
 3. Be direct and accurate - prioritize clarity over verbosity
-4. Cite specific information from the document when relevant
-5. If you cannot find relevant information, clearly state that{conversation_context}
+4. Cite factual claims using only the source labels [S1], [S2], etc. shown in the context
+5. Never invent a source label or page number; the API returns the verified source metadata separately
+6. If you cannot find relevant information, clearly state that{conversation_context}
 Context from document:
 {context}
 
@@ -184,7 +204,16 @@ Provide a clear and accurate answer:"""
         llm = get_llm()
         response = llm.invoke(prompt)
         answer = response.content if hasattr(response, 'content') else str(response)
-        
+        # Do not let a model fabricate citation IDs that were not retrieved.
+        allowed_citation_ids = {source["citation_id"] for source in citations}
+        answer = re.sub(
+            r"\[(S\d+)\]",
+            lambda match: match.group(0)
+            if match.group(1) in allowed_citation_ids
+            else "[source unavailable]",
+            answer,
+        )
+
         # Clean up answer if it has redundant prefixes from LLM
         answer = answer.replace("According to your document (analyzed natively via TF-IDF):\n\n", "")
 
@@ -202,49 +231,38 @@ Provide a clear and accurate answer:"""
             "answer": answer,
             "status": "success",
             "relevant_documents": len(docs),
-            "confidence": confidence
+            "confidence": confidence,
+            "citations": citations,
         }
 
-    except Exception as e:
-        logger.error(f"Answer generation error: {e}")
+    except Exception:
+        logger.exception("Answer generation failed")
         return {
-            "answer": f"Error generating answer: {str(e)}",
+            "answer": "Unable to generate an answer. Check server logs.",
             "status": "error"
         }
 
 
-async def generate_answer_async(query: str, session_id: Optional[str] = None):
+async def generate_answer_async(query: str, session_id: Optional[str] = None, workspace_id: str = "default"):
     """
     Asynchronous answer generation
     Runs in thread pool for non-blocking operation
     """
-    loop = asyncio.get_event_loop()
-    executor = ThreadPoolExecutor(max_workers=4)
-    
     try:
-        result = await loop.run_in_executor(
-            executor,
-            generate_answer,
-            query,
-            session_id
-        )
+        result = await asyncio.to_thread(generate_answer, query, session_id, workspace_id)
         return result
-    except Exception as e:
-        logger.error(f"Async answer generation error: {e}")
+    except Exception:
+        logger.exception("Asynchronous answer generation failed")
         return {
-            "answer": f"Error: {str(e)}",
+            "answer": "Unable to generate an answer. Check server logs.",
             "status": "error"
         }
 
 
-def clear_conversation(session_id: str):
-    """Clear conversation history for a session"""
-    try:
-        conv_manager = ConversationManager(session_id)
-        conv_manager.clear()
-        logger.info(f"Cleared conversation for session {session_id}")
-        return {"status": "cleared"}
-    except Exception as e:
-        logger.error(f"Error clearing conversation: {e}")
-        return {"status": "error", "message": str(e)}
+def clear_conversation(session_id: str, workspace_id: str = "default"):
+    """Clear conversation history for one workspace and session."""
+    conv_manager = ConversationManager(session_id, workspace_id)
+    conv_manager.clear()
+    logger.info("Cleared conversation for workspace %s", workspace_id)
+    return {"status": "cleared"}
 

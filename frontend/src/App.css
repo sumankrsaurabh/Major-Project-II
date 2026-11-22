@@ -371,3 +371,40 @@
     min-height: 260px;
   }
 }
+
+
+/* Source references returned by the page-aware retrieval pipeline. */
+.message-citations {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color, rgba(128, 128, 128, 0.2));
+}
+
+.citations-heading {
+  width: 100%;
+  color: var(--text-muted, #777);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.citation-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border-color, rgba(128, 128, 128, 0.25));
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  color: var(--text-secondary, inherit);
+  font-size: 0.75rem;
+}
+
+.citation-chip strong {
+  color: var(--accent-color, inherit);
+}

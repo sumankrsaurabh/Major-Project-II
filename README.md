@@ -1,18 +1,27 @@
-# 🚀 Advanced Chat with PDF - Complete System Guide
+# ChatWithPDF — Yuktara Technologies
 
-## 📖 Overview
+> **Engineering status:** Active modernization. This repository contains an existing prototype and a staged plan toward production readiness. Features described in older sections are not automatically evidence of production readiness; see the engineering roadmap and verify each capability against tests.
 
-Your PDF chat system has been enhanced with **advanced NLP capabilities** comparable to ChatGPT/Gemini. All features use custom Python algorithms with **no external ML models** required.
+## Engineering handbook
 
-### ✨ What You Get
-- 🎯 **14 Advanced Features** for text analysis
-- 📚 **Custom NLP Algorithms** (TextRank, TFIDF, Sentiment Analysis, NER, etc.)
-- 🔒 **100% Private** - All processing is local, no cloud API calls
-- ⚡ **Fast Processing** - Optimized algorithms for quick results
-- 🎨 **Easy Integration** - REST API ready for any frontend
-- 📖 **Well Documented** - Complete guides and examples
+- [Target architecture](docs/ARCHITECTURE.md)
+- [Engineering roadmap and release gates](docs/ENGINEERING_ROADMAP.md)
+- [Contribution and code standards](CONTRIBUTING.md)
+- [Product UI standards](docs/PRODUCT_UI_STANDARD.md)
+- [Architecture decision records](docs/adr/)
 
----
+The project is being evolved as a modular monolith with a React client, FastAPI application, replaceable local AI providers, workspace-scoped document indexes, and grounded citations. The current implementation is not yet a production release.
+
+## Current capabilities and limitations
+
+- PDF upload with size and signature validation.
+- Browser-local workspace separation and document listing/deletion.
+- NumPy-based local vector index using Sentence Transformers embeddings.
+- Configurable local Ollama generation, with a clearly labelled extractive fallback.
+- Versioned `/api/v1` endpoints; legacy routes remain during migration.
+- Automated backend regression tests and frontend lint/build checks.
+
+Important limitations: workspace IDs are not authentication; multi-process storage coordination is not implemented; page-level citations, OCR for scanned PDFs, comprehensive integration tests, and hosted multi-tenant authorization remain outstanding. See the roadmap before deployment.
 
 ## 🎯 Quick Navigation
 
@@ -59,6 +68,65 @@ curl -X POST http://localhost:8000/sentiment-analysis \
 Visit: http://localhost:8000/docs
 
 ---
+
+## ⚙️ Local Development Setup
+
+### Requirements
+- Python 3.11
+- Node.js 22 and npm
+- Ollama (for local generative answers)
+- A locally cached Sentence Transformers embedding model
+
+### 1. Configure the backend
+```bash
+cd backend
+python -m venv .venv
+# Activate the virtual environment, then:
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+The default configuration uses Ollama with `qwen2.5:3b`. Start Ollama and pull the model:
+
+```bash
+ollama pull qwen2.5:3b
+```
+
+The embedding model is configured for local-only loading. Download/cache it once in the same Python environment before starting the API:
+
+```bash
+python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+```
+
+For a non-generative extractive fallback, set `LLM_PROVIDER=extractive` in `.env`. This fallback does not generate new text.
+
+### 2. Start the backend
+From the `backend` directory:
+
+```bash
+python -m uvicorn main:app --reload
+```
+
+### 3. Start the frontend
+In a second terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+### 4. Verify the API
+- Health: `http://localhost:8000/api/v1/health`
+- OpenAPI docs: `http://localhost:8000/docs`
+- Versioned API: `/api/v1`
+- Legacy routes remain temporarily available for compatibility.
+
+The application is local-first, but privacy depends on deployment configuration, logs, model settings, and storage access. Do not use this prototype for sensitive or multi-user hosted workloads until the release blockers in the engineering roadmap are closed.
+
+## 📚 Legacy Prototype Feature Inventory
+
+> The following sections document older prototype endpoints and algorithm experiments. They are not a guarantee that every feature is exposed, accurate, or production-supported in the current build. Verify each endpoint and implementation before relying on it.
 
 ## 📚 Features Overview
 
