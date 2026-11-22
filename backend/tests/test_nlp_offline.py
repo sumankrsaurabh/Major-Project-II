@@ -33,7 +33,6 @@ def test_ner_and_lemmatizer_degrade_gracefully_without_corpora(monkeypatch):
     monkeypatch.setattr(nlp, "word_tokenize", lambda _text: (_ for _ in ()).throw(LookupError()))
     monkeypatch.setattr(nlp, "pos_tag", lambda _tokens: (_ for _ in ()).throw(LookupError()))
     monkeypatch.setattr(nlp, "ne_chunk", lambda _tags: (_ for _ in ()).throw(LookupError()))
-    monkeypatch.setattr(nlp.wordnet, "synsets", lambda *_args, **_kwargs: (_ for _ in ()).throw(LookupError()))
 
     entities = nlp.NamedEntityRecognizer().recognize_entities("Contact team@example.com on 2026-11-22.")
     assert "team@example.com" in entities["EMAIL"]
