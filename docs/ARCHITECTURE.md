@@ -230,7 +230,7 @@ Inventory existing endpoints, schemas, imports, dependencies, and UI behavior. A
 Introduce settings, API versioning, application use cases, domain types, and infrastructure adapters. Keep compatibility wrappers around current routes.
 
 ### Stage C — Replace AI internals
-Implement a real Ollama adapter, model health checks, embedding provider configuration, FAISS adapter, index metadata/versioning, and reliable retrieval citations. Remove misleading fallback behavior that pretends random/hash vectors are semantic embeddings.
+Add a configurable Ollama chat adapter with startup readiness checks, keep the extractive engine explicitly labelled as non-generative, then implement embedding provider configuration, index metadata/versioning, and reliable retrieval citations. Remove misleading fallback behavior that pretends random/hash vectors are semantic embeddings.
 
 ### Stage D — Ingestion quality
 Add OCR fallback, page-aware extraction, structure-aware chunking, ingestion state, retries, and document deletion.
