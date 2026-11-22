@@ -1,7 +1,9 @@
 import json
 import os
 import re
+import sqlite3
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -12,8 +14,43 @@ from services.embedding_service import get_embedding_model
 
 WORKSPACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 DOCUMENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
 _store_cache = {}
 _store_lock = threading.RLock()
+
+
+@contextmanager
+def _workspace_write_transaction(workspace_id: str):
+    """Serialize index mutations across processes with a SQLite write transaction.
+
+    The lock database lives beside the indexes, so deleting the last document
+    cannot remove the lock protecting that workspace.
+    """
+    base = Path(VECTOR_PATH).resolve()
+    base.mkdir(parents=True, exist_ok=True)
+    lock_db = base / ".workspace-locks.sqlite3"
+    connection = sqlite3.connect(str(lock_db), timeout=30, isolation_level=None)
+    try:
+        connection.execute("PRAGMA busy_timeout = 30000")
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS workspace_locks ("
+            "workspace_id TEXT PRIMARY KEY, touched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+        )
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            "INSERT INTO workspace_locks(workspace_id) VALUES (?) "
+            "ON CONFLICT(workspace_id) DO UPDATE SET touched_at=CURRENT_TIMESTAMP",
+            (validate_workspace_id(workspace_id),),
+        )
+        yield
+        connection.execute("COMMIT")
+    except Exception:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+        raise
+    finally:
+        connection.close()
 
 
 def validate_workspace_id(workspace_id: str) -> str:
@@ -162,10 +199,10 @@ def create_vector_store(
     """Append a document's chunks to the selected workspace index."""
     path = _workspace_path(workspace_id)
     document_id = validate_document_id(document_id)
-    with _store_lock:
-        store = _store_cache.get(workspace_id)
-        if store is None:
-            store = CustomVectorStore.load_local(str(path), get_embedding_model())
+    with _store_lock, _workspace_write_transaction(workspace_id):
+        # Reload under the cross-process lock. A process-local cache could
+        # otherwise overwrite changes committed by another worker.
+        store = CustomVectorStore.load_local(str(path), get_embedding_model())
         if store is None:
             store = CustomVectorStore(get_embedding_model())
         documents = [
@@ -201,10 +238,9 @@ def delete_workspace_document(workspace_id: str, document_id: str):
     """Remove a document and its vectors from one workspace."""
     path = _workspace_path(workspace_id)
     document_id = validate_document_id(document_id)
-    with _store_lock:
-        store = _store_cache.get(workspace_id)
-        if store is None:
-            store = CustomVectorStore.load_local(str(path), get_embedding_model())
+    with _store_lock, _workspace_write_transaction(workspace_id):
+        # Reload inside the transaction so deletes preserve concurrent additions.
+        store = CustomVectorStore.load_local(str(path), get_embedding_model())
         if store is None:
             return False
         if not store.remove_document(document_id):
@@ -224,13 +260,10 @@ def delete_workspace_document(workspace_id: str, document_id: str):
 def load_vector_store(workspace_id: str = "default"):
     """Load only the selected workspace index; never fall back to another workspace."""
     path = _workspace_path(workspace_id)
+    # Never serve a long-lived process-local snapshot: another worker may
+    # have committed a newer index since this process last loaded it.
     with _store_lock:
-        if workspace_id in _store_cache:
-            return _store_cache[workspace_id]
-        store = CustomVectorStore.load_local(str(path), get_embedding_model())
-        if store is not None:
-            _store_cache[workspace_id] = store
-        return store
+        return CustomVectorStore.load_local(str(path), get_embedding_model())
 
 
 def clear_vector_store_cache():
