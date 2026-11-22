@@ -156,12 +156,25 @@ def generate_answer(query: str, session_id: Optional[str] = None, workspace_id: 
 
         # Build context from documents - improved formatting
         context_parts = []
-        for i, doc in enumerate(docs[:RERANK_TOP_K]):
-            # Include score in context for better relevance awareness
-            score = doc.metadata.get('score', 0) if hasattr(doc, 'metadata') else 0
-            context_parts.append(f"{doc.page_content}")
-        
-        context = "\n\n".join(context_parts)
+        citations = []
+        for index, doc in enumerate(docs[:RERANK_TOP_K], start=1):
+            metadata = getattr(doc, "metadata", {}) or {}
+            citation_id = f"S{index}"
+            source = {
+                "citation_id": citation_id,
+                "document_id": metadata.get("document_id"),
+                "filename": metadata.get("filename", "Imported document"),
+                "page_number": metadata.get("page_number"),
+                "chunk_index": metadata.get("chunk_index"),
+                "score": metadata.get("score"),
+            }
+            citations.append(source)
+            page_label = f"Page {source['page_number']}" if source["page_number"] else "Page unavailable"
+            context_parts.append(
+                f"[{citation_id} | {source['filename']} | {page_label}]\\n{doc.page_content}"
+            )
+
+        context = "\\n\\n".join(context_parts)
 
         # Build conversation context if enabled
         conversation_context = ""
@@ -177,8 +190,9 @@ Your instructions:
 1. Answer the question ONLY using information from the provided context
 2. If the exact answer isn't in the context, provide the most relevant information available
 3. Be direct and accurate - prioritize clarity over verbosity
-4. Cite specific information from the document when relevant
-5. If you cannot find relevant information, clearly state that{conversation_context}
+4. Cite factual claims using only the source labels [S1], [S2], etc. shown in the context
+5. Never invent a source label or page number; the API returns the verified source metadata separately
+6. If you cannot find relevant information, clearly state that{conversation_context}
 Context from document:
 {context}
 
@@ -208,7 +222,8 @@ Provide a clear and accurate answer:"""
             "answer": answer,
             "status": "success",
             "relevant_documents": len(docs),
-            "confidence": confidence
+            "confidence": confidence,
+            "citations": citations,
         }
 
     except Exception:
