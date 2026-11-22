@@ -21,7 +21,13 @@ class HttpClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
-        const errorMsg = error.response?.data?.detail || error.message || 'An unexpected error occurred';
+        const errorPayload = error.response?.data?.error;
+        const baseMessage = errorPayload?.message
+          || error.response?.data?.detail
+          || error.message
+          || 'An unexpected error occurred';
+        const requestId = errorPayload?.request_id || error.response?.headers?.['x-request-id'];
+        const errorMsg = requestId ? `${baseMessage} (Request ID: ${requestId})` : baseMessage;
         console.error('API Error:', errorMsg);
         return Promise.reject(new Error(errorMsg));
       }
