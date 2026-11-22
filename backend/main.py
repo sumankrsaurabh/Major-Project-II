@@ -7,13 +7,13 @@ from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_FILE_SIZE
 from core.nlp_processor import AdvancedTokenizer
 from core.pdf_processor import extract_text_async
-from core.vector_store import create_vector_store, load_vector_store
+from core.vector_store import create_vector_store, load_vector_store, validate_workspace_id
 from models.schemas import ClearConversationRequest, QueryRequest
 from routes.analysis_routes import router as analysis_router
 from services.embedding_service import get_embedding_model
@@ -81,9 +81,13 @@ async def health():
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(file: UploadFile = File(...), workspace_id: str = Form("default")):
     if not app_state["models_loaded"]:
         raise HTTPException(status_code=503, detail="AI services are not ready")
+    try:
+        workspace_id = validate_workspace_id(workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace identifier")
 
     filename = Path(file.filename or "").name
     if Path(filename).suffix.lower() != ".pdf":
@@ -120,7 +124,7 @@ async def upload(file: UploadFile = File(...)):
         if not chunks:
             raise HTTPException(status_code=422, detail="The PDF did not produce any indexable text")
 
-        await asyncio.to_thread(create_vector_store, chunks)
+        await asyncio.to_thread(create_vector_store, chunks, workspace_id)
         return {
             "message": "PDF processed successfully",
             "filename": filename,
@@ -142,11 +146,15 @@ async def upload(file: UploadFile = File(...)):
 async def chat(req: QueryRequest):
     if not app_state["models_loaded"]:
         raise HTTPException(status_code=503, detail="AI services are not ready")
-    if not load_vector_store():
-        raise HTTPException(status_code=409, detail="No PDF has been indexed yet")
+    try:
+        workspace_id = validate_workspace_id(req.workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace identifier")
+    if not load_vector_store(workspace_id):
+        raise HTTPException(status_code=409, detail="No PDF has been indexed in this workspace")
 
     try:
-        answer_data = await generate_answer_async(req.question, req.session_id)
+        answer_data = await generate_answer_async(req.question, req.session_id, workspace_id)
         logger.info("Chat response generated (%s characters)", len(answer_data.get("answer", "")))
         return answer_data
     except Exception:
@@ -164,8 +172,12 @@ async def clear_conversation_endpoint(req: ClearConversationRequest):
 
 
 @app.get("/status")
-async def status():
-    store = load_vector_store()
+async def status(workspace_id: str = Query("default", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")):
+    try:
+        workspace_id = validate_workspace_id(workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace identifier")
+    store = load_vector_store(workspace_id)
     return {
         "server_status": "running",
         "models_loaded": app_state["models_loaded"],
