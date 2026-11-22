@@ -171,10 +171,10 @@ def generate_answer(query: str, session_id: Optional[str] = None, workspace_id: 
             citations.append(source)
             page_label = f"Page {source['page_number']}" if source["page_number"] else "Page unavailable"
             context_parts.append(
-                f"[{citation_id} | {source['filename']} | {page_label}]\\n{doc.page_content}"
+                f"[{citation_id} | {source['filename']} | {page_label}]\n{doc.page_content}"
             )
 
-        context = "\\n\\n".join(context_parts)
+        context = "\n\n".join(context_parts)
 
         # Build conversation context if enabled
         conversation_context = ""
