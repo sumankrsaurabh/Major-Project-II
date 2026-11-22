@@ -53,6 +53,7 @@ class CustomVectorStore:
         self.embedding_model = embedding_model
         self.documents = []
         self.vectors = None
+        self._lock = threading.RLock()
 
     def add_documents(self, documents: list[NativeDocument]):
         if not documents:
@@ -61,13 +62,14 @@ class CustomVectorStore:
         new_vectors = np.asarray(embeddings, dtype=np.float32)
         if new_vectors.ndim != 2 or len(new_vectors) != len(documents):
             raise ValueError("Embedding provider returned an invalid document matrix")
-        if self.vectors is None:
-            self.vectors = new_vectors
-        else:
-            if self.vectors.shape[1] != new_vectors.shape[1]:
-                raise ValueError("Embedding dimensions do not match the existing workspace index")
-            self.vectors = np.vstack([self.vectors, new_vectors])
-        self.documents.extend(documents)
+        with self._lock:
+            if self.vectors is None:
+                self.vectors = new_vectors
+            else:
+                if self.vectors.shape[1] != new_vectors.shape[1]:
+                    raise ValueError("Embedding dimensions do not match the existing workspace index")
+                self.vectors = np.vstack([self.vectors, new_vectors])
+            self.documents.extend(documents)
 
     def similarity_search(self, query: str, k: int = 4) -> list[NativeDocument]:
         if self.vectors is None or not self.documents or k <= 0:
@@ -85,26 +87,39 @@ class CustomVectorStore:
             for index in top_indices
         ]
 
+    def remove_document(self, document_id: str) -> bool:
+        with self._lock:
+            keep = [
+                index for index, doc in enumerate(self.documents)
+                if doc.metadata.get("document_id", "legacy") != document_id
+            ]
+            if len(keep) == len(self.documents):
+                return False
+            self.documents = [self.documents[index] for index in keep]
+            self.vectors = self.vectors[keep] if keep else None
+            return True
+
     def save_local(self, folder_path: str):
-        path = Path(folder_path)
-        path.mkdir(parents=True, exist_ok=True)
-        archive = path / "index.npz"
-        temporary = path / f".index-{os.getpid()}-{threading.get_ident()}.tmp"
-        docs_json = json.dumps(
-            [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in self.documents],
-            ensure_ascii=False,
-        )
-        # A single archive means vectors and their document metadata are swapped together.
-        with temporary.open("wb") as output:
-            np.savez_compressed(
-                output,
-                vectors=self.vectors if self.vectors is not None else np.empty((0, 0), dtype=np.float32),
-                documents=np.asarray(docs_json),
-                format_version=np.asarray(1, dtype=np.int64),
+        with self._lock:
+            path = Path(folder_path)
+            path.mkdir(parents=True, exist_ok=True)
+            archive = path / "index.npz"
+            temporary = path / f".index-{os.getpid()}-{threading.get_ident()}.tmp"
+            docs_json = json.dumps(
+                [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in self.documents],
+                ensure_ascii=False,
             )
-            output.flush()
-            os.fsync(output.fileno())
-        os.replace(temporary, archive)
+        # A single archive means vectors and their document metadata are swapped together.
+            with temporary.open("wb") as output:
+                np.savez_compressed(
+                    output,
+                    vectors=self.vectors if self.vectors is not None else np.empty((0, 0), dtype=np.float32),
+                    documents=np.asarray(docs_json),
+                    format_version=np.asarray(1, dtype=np.int64),
+                )
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, archive)
 
     @classmethod
     def load_local(cls, folder_path: str, embedding_model):
@@ -192,14 +207,8 @@ def delete_workspace_document(workspace_id: str, document_id: str):
             store = CustomVectorStore.load_local(str(path), get_embedding_model())
         if store is None:
             return False
-        keep = [
-            index for index, doc in enumerate(store.documents)
-            if doc.metadata.get("document_id", "legacy") != document_id
-        ]
-        if len(keep) == len(store.documents):
+        if not store.remove_document(document_id):
             return False
-        store.documents = [store.documents[index] for index in keep]
-        store.vectors = store.vectors[keep] if keep else None
         if store.documents:
             store.save_local(str(path))
             _store_cache[workspace_id] = store
