@@ -90,6 +90,10 @@ class PDFService extends BaseApiService {
   async getHealth() {
     return this.request('GET', '/health');
   }
+
+  async deleteDocument(workspaceId, documentId) {
+    return this.request('DELETE', `/workspaces/${workspaceId}/documents/${documentId}`);
+  }
 }
 
 /**
