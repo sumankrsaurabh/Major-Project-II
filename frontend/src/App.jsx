@@ -14,6 +14,15 @@ const initialStatus = {
 }
 
 function App() {
+  const [workspaceId] = useState(() => {
+    const storageKey = 'yuktara.chatwithpdf.workspace.v1'
+    let id = window.localStorage.getItem(storageKey)
+    if (!id) {
+      id = window.crypto.randomUUID()
+      window.localStorage.setItem(storageKey, id)
+    }
+    return id
+  })
   const [activeTab, setActiveTab] = useState('upload')
   const [pdfStatus, setPdfStatus] = useState(initialStatus)
   const [chatQuery, setChatQuery] = useState('')
@@ -24,7 +33,7 @@ function App() {
   useEffect(() => {
     const loadStatus = async () => {
       try {
-        const response = await pdfService.getStatus()
+        const response = await pdfService.getStatus(workspaceId)
         if (response && response.server_status) {
           setPdfStatus((prev) => ({
             ...prev,
@@ -43,7 +52,7 @@ function App() {
     }
 
     loadStatus()
-  }, [])
+  }, [workspaceId])
 
   const handleUploadSuccess = (status) => {
     if (status) {
@@ -70,7 +79,7 @@ function App() {
     setIsChatLoading(true)
 
     try {
-      const response = await chatService.askQuestion(text)
+      const response = await chatService.askQuestion(text, workspaceId, workspaceId)
       const answerText = response?.answer || response?.message || response?.data || 'No answer available.'
       const assistantMessage = {
         id: `ai-${Date.now()}`,
@@ -167,7 +176,7 @@ function App() {
           </div>
 
           {activeTab === 'upload' && (
-            <FileUpload pdfStatus={pdfStatus} setPdfStatus={setPdfStatus} onUploadSuccess={handleUploadSuccess} />
+            <FileUpload workspaceId={workspaceId} pdfStatus={pdfStatus} setPdfStatus={setPdfStatus} onUploadSuccess={handleUploadSuccess} />
           )}
 
           {activeTab === 'chat' && (
