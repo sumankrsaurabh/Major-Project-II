@@ -275,7 +275,10 @@ async def chat(req: QueryRequest):
 @app.post("/clear-conversation", response_model=ClearConversationResponse, responses=ERROR_RESPONSES)
 async def clear_conversation_endpoint(req: ClearConversationRequest):
     try:
-        return clear_conversation(req.session_id)
+        workspace_id = validate_workspace_id(req.workspace_id)
+        return clear_conversation(req.session_id, workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid workspace identifier")
     except Exception:
         logger.exception("Conversation cleanup failed")
         raise HTTPException(status_code=500, detail="Unable to clear conversation")
