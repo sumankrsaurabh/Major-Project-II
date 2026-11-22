@@ -148,12 +148,12 @@ Feature modules own their UI, API adapters, hooks, and feature-specific types. S
 
 1. Validate extension, MIME signature, size, page count, and encrypted/corrupt state.
 2. Generate an opaque document ID and store the file outside the public web root.
-3. Extract page text and preserve page number and source metadata.
+3. Extract non-empty page text while preserving original one-based PDF page numbers, including gaps for blank pages.
 4. Run OCR only for pages with insufficient extractable text.
 5. Normalize text without removing meaningful headings, tables, or page boundaries.
-6. Chunk by document structure with bounded size and overlap.
+6. Chunk each extracted page independently with bounded size and overlap so a chunk never loses its source page.
 7. Generate embeddings in batches using the configured embedding model.
-8. Assign a server-generated document ID and persist its chunks with source metadata in the workspace index. The current local adapter writes vectors and chunk metadata together in one atomically replaced NumPy archive.
+8. Assign a server-generated document ID and persist each chunk with document ID, filename, original page number, and chunk indexes in the workspace index. The current local adapter writes vectors and chunk metadata together in one atomically replaced NumPy archive.
 9. Expose workspace document inventory only after indexing is complete; support deletion of a document and its associated vectors.
 10. On failure, clean temporary files and mark the document failed with a safe error code.
 
@@ -165,7 +165,7 @@ Feature modules own their UI, API adapters, hooks, and feature-specific types. S
 4. Build a bounded prompt from trusted system instructions and untrusted document excerpts.
 5. Explicitly instruct the model to treat document text as data, not executable instructions.
 6. Generate with the configured local LLM provider and timeout.
-7. Return answer text, citations (document ID, filename, page, chunk ID), and retrieval metadata.
+7. Return answer text and structured source references (citation ID, document ID, filename, page number, chunk index, and retrieval score). The prompt uses the same source labels so the model can cite only retrieved evidence.
 8. If evidence is insufficient, say so rather than fabricate an answer.
 
 ## 7. Storage and tenancy
