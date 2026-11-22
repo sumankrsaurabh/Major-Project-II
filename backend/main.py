@@ -75,7 +75,8 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-app.include_router(analysis_router, prefix="/api")\napp.include_router(analysis_router, prefix="/api/v1")
+app.include_router(analysis_router, prefix="/api")
+app.include_router(analysis_router, prefix="/api/v1")
 
 
 @app.get("/health")
@@ -138,6 +139,8 @@ async def upload(file: UploadFile = File(...), workspace_id: str = Form("default
         await asyncio.to_thread(create_vector_store, chunks, workspace_id, document_id, filename)
         return {
             "message": "PDF processed successfully",
+            "document_id": document_id,
+            "workspace_id": workspace_id,
             "filename": filename,
             "chunks": len(chunks),
             "file_size_mb": round(file_size / (1024**2), 2),
@@ -218,6 +221,19 @@ async def status(workspace_id: str = Query("default", min_length=1, max_length=6
         "generative": getattr(app_state["llm_model"], "provider", "extractive") == "ollama",
         "max_file_size_mb": MAX_FILE_SIZE / (1024**2),
     }
+
+
+# Versioned API surface. Existing routes remain as compatibility aliases during migration.
+async def status_v1(workspace_id: str):
+    return await status(workspace_id)
+
+
+app.add_api_route("/api/v1/health", health, methods=["GET"], tags=["API v1"])
+app.add_api_route("/api/v1/documents/upload", upload, methods=["POST"], response_model=UploadResponse, tags=["API v1"])
+app.add_api_route("/api/v1/workspaces/{workspace_id}/documents/{document_id}", delete_document, methods=["DELETE"], tags=["API v1"])
+app.add_api_route("/api/v1/chat", chat, methods=["POST"], tags=["API v1"])
+app.add_api_route("/api/v1/conversations/clear", clear_conversation_endpoint, methods=["POST"], tags=["API v1"])
+app.add_api_route("/api/v1/workspaces/{workspace_id}/status", status_v1, methods=["GET"], tags=["API v1"])
 
 
 if __name__ == "__main__":
