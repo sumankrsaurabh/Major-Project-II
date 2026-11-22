@@ -20,7 +20,7 @@ from core.vector_store import (
     create_vector_store, delete_workspace_document, list_workspace_documents,
     load_vector_store, validate_document_id, validate_workspace_id,
 )
-from models.schemas import ClearConversationRequest, QueryRequest
+from models.schemas import ClearConversationRequest, QueryRequest, UploadResponse
 from routes.analysis_routes import router as analysis_router
 from services.embedding_service import get_embedding_model
 from services.llm_service import get_llm
@@ -75,7 +75,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-app.include_router(analysis_router)
+app.include_router(analysis_router, prefix="/api")\napp.include_router(analysis_router, prefix="/api/v1")
 
 
 @app.get("/health")
@@ -90,7 +90,7 @@ async def health():
     }
 
 
-@app.post("/upload")
+@app.post("/upload", response_model=UploadResponse)
 async def upload(file: UploadFile = File(...), workspace_id: str = Form("default")):
     if not app_state["models_loaded"]:
         raise HTTPException(status_code=503, detail="AI services are not ready")
