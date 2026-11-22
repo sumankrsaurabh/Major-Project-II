@@ -18,7 +18,7 @@ from starlette.responses import JSONResponse
 
 from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_FILE_SIZE
 from core.nlp_processor import AdvancedTokenizer
-from core.pdf_processor import extract_text_async
+from core.pdf_processor import extract_pages_async
 from core.vector_store import (
     create_vector_store, delete_workspace_document, list_workspace_documents,
     load_vector_store, validate_document_id, validate_workspace_id,
@@ -204,17 +204,28 @@ async def upload(file: UploadFile = File(...), workspace_id: str = Form("default
             raise HTTPException(status_code=415, detail="The uploaded file is not a valid PDF")
 
         logger.info("Processing PDF upload (%s bytes)", file_size)
-        extracted_text = await extract_text_async(str(temp_path))
-        if not extracted_text or not extracted_text.strip():
+        extracted_pages = await extract_pages_async(str(temp_path))
+        if not extracted_pages:
             raise HTTPException(status_code=422, detail="No extractable text found in the PDF")
 
         tokenizer = AdvancedTokenizer()
-        chunks = tokenizer.chunk_text(extracted_text, CHUNK_SIZE, CHUNK_OVERLAP)
+        chunks = []
+        chunk_metadata = []
+        for page in extracted_pages:
+            page_chunks = tokenizer.chunk_text(page["text"], CHUNK_SIZE, CHUNK_OVERLAP)
+            for page_chunk_index, chunk in enumerate(page_chunks):
+                chunks.append(chunk)
+                chunk_metadata.append({
+                    "page_number": page["page_number"],
+                    "page_chunk_index": page_chunk_index,
+                })
         if not chunks:
             raise HTTPException(status_code=422, detail="The PDF did not produce any indexable text")
 
         document_id = uuid.uuid4().hex
-        await asyncio.to_thread(create_vector_store, chunks, workspace_id, document_id, filename)
+        await asyncio.to_thread(
+            create_vector_store, chunks, workspace_id, document_id, filename, chunk_metadata
+        )
         return {
             "message": "PDF processed successfully",
             "document_id": document_id,
