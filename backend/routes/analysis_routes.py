@@ -69,8 +69,8 @@ async def analyze_document(request: DocumentAnalysisRequest):
         )
         return AnalysisResponse(status="success", data=result)
     except Exception as e:
-        logger.error(f"Document analysis error: {e}")
-        return AnalysisResponse(status="error", data={}, error=str(e))
+        logger.exception("Document analysis failed")
+        return AnalysisResponse(status="error", data={}, error="Analysis failed. Check server logs.")
 
 
 @router.post("/query", response_model=AnalysisResponse)
@@ -81,8 +81,8 @@ async def analyze_query(request: QueryRequest):
         result = await comprehensive_service.analyze_query(request.query)
         return AnalysisResponse(status="success", data=result)
     except Exception as e:
-        logger.error(f"Query analysis error: {e}")
-        return AnalysisResponse(status="error", data={}, error=str(e))
+        logger.exception("Query analysis failed")
+        return AnalysisResponse(status="error", data={}, error="Analysis failed. Check server logs.")
 
 
 @router.post("/insights", response_model=AnalysisResponse)
@@ -93,8 +93,8 @@ async def extract_insights(request: DocumentAnalysisRequest):
         result = await comprehensive_service.extract_insights(request.text)
         return AnalysisResponse(status="success", data=result)
     except Exception as e:
-        logger.error(f"Insights extraction error: {e}")
-        return AnalysisResponse(status="error", data={}, error=str(e))
+        logger.exception("Insights extraction failed")
+        return AnalysisResponse(status="error", data={}, error="Analysis failed. Check server logs.")
 
 
 @router.post("/conversation", response_model=AnalysisResponse)
@@ -109,8 +109,8 @@ async def process_conversation(request: ConversationRequest):
         )
         return AnalysisResponse(status="success", data=result)
     except Exception as e:
-        logger.error(f"Conversation processing error: {e}")
-        return AnalysisResponse(status="error", data={}, error=str(e))
+        logger.exception("Conversation processing failed")
+        return AnalysisResponse(status="error", data={}, error="Analysis failed. Check server logs.")
 
 
 @router.post("/compare", response_model=AnalysisResponse)
@@ -124,8 +124,8 @@ async def compare_texts(request: TextComparisonRequest):
         )
         return AnalysisResponse(status="success", data=result)
     except Exception as e:
-        logger.error(f"Text comparison error: {e}")
-        return AnalysisResponse(status="error", data={}, error=str(e))
+        logger.exception("Text comparison failed")
+        return AnalysisResponse(status="error", data={}, error="Analysis failed. Check server logs.")
 
 
 @router.post("/answer", response_model=AnalysisResponse)
@@ -139,8 +139,8 @@ async def generate_answer(request: AnswerGenerationRequest):
         )
         return AnalysisResponse(status="success", data=result)
     except Exception as e:
-        logger.error(f"Answer generation error: {e}")
-        return AnalysisResponse(status="error", data={}, error=str(e))
+        logger.exception("Answer generation failed")
+        return AnalysisResponse(status="error", data={}, error="Analysis failed. Check server logs.")
 
 
 @router.get("/health", response_model=AnalysisResponse)
