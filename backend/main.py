@@ -68,6 +68,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+ERROR_RESPONSES = {
+    code: {"model": ErrorResponse, "description": "Standard API error envelope"}
+    for code in (400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503)
+}
+
+
+
 @app.middleware("http")
 async def attach_request_id(request: Request, call_next):
     request_id = uuid.uuid4().hex
@@ -146,11 +153,11 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-app.include_router(analysis_router, prefix="/api")
-app.include_router(analysis_router, prefix="/api/v1")
+app.include_router(analysis_router, prefix="/api", responses=ERROR_RESPONSES)
+app.include_router(analysis_router, prefix="/api/v1", responses=ERROR_RESPONSES)
 
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", response_model=HealthResponse, responses=ERROR_RESPONSES)
 async def health():
     return {
         "status": "ok",
@@ -162,7 +169,7 @@ async def health():
     }
 
 
-@app.post("/upload", response_model=UploadResponse)
+@app.post("/upload", response_model=UploadResponse, responses=ERROR_RESPONSES)
 async def upload(file: UploadFile = File(...), workspace_id: str = Form("default")):
     if not app_state["models_loaded"]:
         raise HTTPException(status_code=503, detail="AI services are not ready")
@@ -227,7 +234,7 @@ async def upload(file: UploadFile = File(...), workspace_id: str = Form("default
         temp_path.unlink(missing_ok=True)
 
 
-@app.delete("/workspaces/{workspace_id}/documents/{document_id}", response_model=DeleteDocumentResponse)
+@app.delete("/workspaces/{workspace_id}/documents/{document_id}", response_model=DeleteDocumentResponse, responses=ERROR_RESPONSES)
 async def delete_document(workspace_id: str, document_id: str):
     try:
         workspace_id = validate_workspace_id(workspace_id)
@@ -245,7 +252,7 @@ async def delete_document(workspace_id: str, document_id: str):
     }
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, responses=ERROR_RESPONSES)
 async def chat(req: QueryRequest):
     if not app_state["models_loaded"]:
         raise HTTPException(status_code=503, detail="AI services are not ready")
@@ -265,7 +272,7 @@ async def chat(req: QueryRequest):
         raise HTTPException(status_code=500, detail="Unable to generate an answer. Check server logs.")
 
 
-@app.post("/clear-conversation", response_model=ClearConversationResponse)
+@app.post("/clear-conversation", response_model=ClearConversationResponse, responses=ERROR_RESPONSES)
 async def clear_conversation_endpoint(req: ClearConversationRequest):
     try:
         return clear_conversation(req.session_id)
@@ -274,7 +281,7 @@ async def clear_conversation_endpoint(req: ClearConversationRequest):
         raise HTTPException(status_code=500, detail="Unable to clear conversation")
 
 
-@app.get("/status", response_model=StatusResponse)
+@app.get("/status", response_model=StatusResponse, responses=ERROR_RESPONSES)
 async def status(workspace_id: str = Query("default", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")):
     try:
         workspace_id = validate_workspace_id(workspace_id)
@@ -299,12 +306,12 @@ async def status_v1(workspace_id: str):
     return await status(workspace_id)
 
 
-app.add_api_route("/api/v1/health", health, methods=["GET"], response_model=HealthResponse, tags=["API v1"])
-app.add_api_route("/api/v1/documents/upload", upload, methods=["POST"], response_model=UploadResponse, tags=["API v1"])
-app.add_api_route("/api/v1/workspaces/{workspace_id}/documents/{document_id}", delete_document, methods=["DELETE"], response_model=DeleteDocumentResponse, tags=["API v1"])
-app.add_api_route("/api/v1/chat", chat, methods=["POST"], response_model=ChatResponse, tags=["API v1"])
-app.add_api_route("/api/v1/conversations/clear", clear_conversation_endpoint, methods=["POST"], response_model=ClearConversationResponse, tags=["API v1"])
-app.add_api_route("/api/v1/workspaces/{workspace_id}/status", status_v1, methods=["GET"], response_model=StatusResponse, tags=["API v1"])
+app.add_api_route("/api/v1/health", health, methods=["GET"], response_model=HealthResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/documents/upload", upload, methods=["POST"], response_model=UploadResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/workspaces/{workspace_id}/documents/{document_id}", delete_document, methods=["DELETE"], response_model=DeleteDocumentResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/chat", chat, methods=["POST"], response_model=ChatResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/conversations/clear", clear_conversation_endpoint, methods=["POST"], response_model=ClearConversationResponse, responses=ERROR_RESPONSES, tags=["API v1"])
+app.add_api_route("/api/v1/workspaces/{workspace_id}/status", status_v1, methods=["GET"], response_model=StatusResponse, responses=ERROR_RESPONSES, tags=["API v1"])
 
 
 if __name__ == "__main__":
