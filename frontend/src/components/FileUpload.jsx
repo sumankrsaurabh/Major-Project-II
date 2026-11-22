@@ -85,7 +85,24 @@ export default function FileUpload({ workspaceId, pdfStatus, setPdfStatus, onUpl
     }
   };
 
-  const handleDeleteDocument = async (documentId) => {\n    try {\n      const response = await pdfService.deleteDocument(workspaceId, documentId);\n      const documents = response.documents || [];\n      setPdfStatus((previous) => ({\n        ...previous,\n        documents,\n        pdf_uploaded: documents.length > 0,\n        filename: documents.at(-1)?.filename || 'No file uploaded',\n        chunks: documents.reduce((total, item) => total + item.chunks, 0),\n      }));\n    } catch (error) {\n      setErrorMsg(error.message || 'Unable to delete document.');\n      setUploadState('error');\n    }\n  };\n\n  const handleDrop = (e) => {
+  const handleDeleteDocument = async (documentId) => {
+    try {
+      const response = await pdfService.deleteDocument(workspaceId, documentId);
+      const documents = response.documents || [];
+      setPdfStatus((previous) => ({
+        ...previous,
+        documents,
+        pdf_uploaded: documents.length > 0,
+        filename: documents.at(-1)?.filename || 'No file uploaded',
+        chunks: documents.reduce((total, item) => total + item.chunks, 0),
+      }));
+    } catch (error) {
+      setErrorMsg(error.message || 'Unable to delete document.');
+      setUploadState('error');
+    }
+  };
+
+  const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
