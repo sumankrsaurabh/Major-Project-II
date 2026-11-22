@@ -13,7 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_FILE_SIZE
 from core.nlp_processor import AdvancedTokenizer
 from core.pdf_processor import extract_text_async
-from core.vector_store import (\n    create_vector_store, delete_workspace_document, list_workspace_documents,\n    load_vector_store, validate_document_id, validate_workspace_id,\n)
+from core.vector_store import (
+    create_vector_store, delete_workspace_document, list_workspace_documents,
+    load_vector_store, validate_document_id, validate_workspace_id,
+)
 from models.schemas import ClearConversationRequest, QueryRequest
 from routes.analysis_routes import router as analysis_router
 from services.embedding_service import get_embedding_model
@@ -124,7 +127,8 @@ async def upload(file: UploadFile = File(...), workspace_id: str = Form("default
         if not chunks:
             raise HTTPException(status_code=422, detail="The PDF did not produce any indexable text")
 
-        document_id = uuid.uuid4().hex\n        await asyncio.to_thread(create_vector_store, chunks, workspace_id, document_id, filename)
+        document_id = uuid.uuid4().hex
+        await asyncio.to_thread(create_vector_store, chunks, workspace_id, document_id, filename)
         return {
             "message": "PDF processed successfully",
             "filename": filename,
@@ -199,7 +203,8 @@ async def status(workspace_id: str = Query("default", min_length=1, max_length=6
     return {
         "server_status": "running",
         "models_loaded": app_state["models_loaded"],
-        "pdf_uploaded": store is not None,\n        "documents": list_workspace_documents(workspace_id),
+        "pdf_uploaded": store is not None,
+        "documents": list_workspace_documents(workspace_id),
         "embedding_model": getattr(app_state["embedding_model"], "model_name", "unavailable"),
         "llm_model": getattr(app_state["llm_model"], "model_name", "unavailable"),
         "max_file_size_mb": MAX_FILE_SIZE / (1024**2),
