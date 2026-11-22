@@ -1,15 +1,22 @@
+from typing import List, Optional
+
 from pydantic import BaseModel, Field
-from typing import Optional, List
+
+
+SESSION_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
+
 
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=500)
-    session_id: Optional[str] = Field(None, description="Session ID for conversation tracking")
+    session_id: Optional[str] = Field(None, min_length=1, max_length=64, pattern=SESSION_ID_PATTERN, description="Opaque session identifier")
+
 
 class ChatResponse(BaseModel):
     answer: str
     status: Optional[str] = "success"
     relevant_documents: Optional[int] = None
     confidence: Optional[str] = None
+
 
 class UploadProgress(BaseModel):
     filename: str
@@ -18,6 +25,7 @@ class UploadProgress(BaseModel):
     percentage: float
     status: str
 
+
 class UploadResponse(BaseModel):
     message: str
     filename: str
@@ -25,11 +33,13 @@ class UploadResponse(BaseModel):
     file_size_mb: float
     status: str
 
+
 class HealthResponse(BaseModel):
     status: str
     models_loaded: bool
     embedding_model: bool
     llm_model: bool
+
 
 class StatusResponse(BaseModel):
     server_status: str
@@ -39,10 +49,11 @@ class StatusResponse(BaseModel):
     llm_model: str
     max_file_size_mb: float
 
+
 class ClearConversationRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(..., min_length=1, max_length=64, pattern=SESSION_ID_PATTERN, description="Opaque session identifier")
+
 
 class ClearConversationResponse(BaseModel):
     status: str
     message: Optional[str] = None
-
