@@ -122,11 +122,11 @@ Hypothetical passage:"""
         return query
 
 
-def generate_answer(query: str, session_id: Optional[str] = None):
+def generate_answer(query: str, session_id: Optional[str] = None, workspace_id: str = "default"):
     """
     Synchronous answer generation with enhanced accuracy and better retrieval
     """
-    store = load_vector_store()
+    store = load_vector_store(workspace_id)
 
     if not store:
         return {"answer": "No document uploaded. Please upload a PDF first."}
@@ -215,13 +215,13 @@ Provide a clear and accurate answer:"""
         }
 
 
-async def generate_answer_async(query: str, session_id: Optional[str] = None):
+async def generate_answer_async(query: str, session_id: Optional[str] = None, workspace_id: str = "default"):
     """
     Asynchronous answer generation
     Runs in thread pool for non-blocking operation
     """
     try:
-        result = await asyncio.to_thread(generate_answer, query, session_id)
+        result = await asyncio.to_thread(generate_answer, query, session_id, workspace_id)
         return result
     except Exception:
         logger.exception("Asynchronous answer generation failed")
