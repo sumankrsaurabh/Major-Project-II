@@ -19,6 +19,18 @@ class ChatResponse(BaseModel):
     confidence: Optional[str] = None
 
 
+class WorkspaceDocumentSummary(BaseModel):
+    document_id: str
+    filename: str
+    chunks: int
+
+
+class DeleteDocumentResponse(BaseModel):
+    status: str
+    document_id: str
+    documents: List[WorkspaceDocumentSummary]
+
+
 class UploadProgress(BaseModel):
     filename: str
     total_size: int
@@ -42,14 +54,19 @@ class HealthResponse(BaseModel):
     models_loaded: bool
     embedding_model: bool
     llm_model: bool
+    answer_engine: str
+    generative: bool
 
 
 class StatusResponse(BaseModel):
     server_status: str
     models_loaded: bool
     pdf_uploaded: bool
+    documents: List[WorkspaceDocumentSummary]
     embedding_model: str
     llm_model: str
+    answer_engine: str
+    generative: bool
     max_file_size_mb: float
 
 
