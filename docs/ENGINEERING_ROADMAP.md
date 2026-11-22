@@ -39,15 +39,15 @@ This roadmap is intentionally incremental. Existing functionality is not conside
 - [ ] Implement embedding provider contract and explicit model identity.
 - [ ] Implement FAISS adapter with safe persistence and index metadata.
 - [ ] Add lexical + semantic retrieval and measured reranking.
-- [ ] Preserve document ID, page, and chunk ID through retrieval.
-- [ ] Return verifiable citations and handle insufficient evidence.
+- [x] Preserve document ID, original page number, and chunk ID through retrieval.
+- [x] Return structured source citations with answer responses; tell the model to use only supplied source labels.
 - [ ] Add prompt-injection defenses for untrusted document content.
 
 **Exit criteria:** deterministic retrieval tests pass and answers cite actual source pages; provider outages produce actionable errors.
 
 ## P3 — Document ingestion
 
-- [ ] Page-aware PDF extraction.
+- [x] Page-aware PDF extraction with original one-based page numbers.
 - [ ] OCR fallback for image-only or low-text pages.
 - [ ] Configurable limits for file size, page count, and processing duration.
 - [ ] Structure-aware chunking and batch embedding.
@@ -63,8 +63,9 @@ This roadmap is intentionally incremental. Existing functionality is not conside
 - [ ] Build responsive application shell and navigation.
 - [ ] Build document library with search, sorting, status, and actions.
 - [ ] Build PDF viewer with page navigation and text selection.
+- [x] Display source citation chips with filename and page number beneath assistant answers.
 - [ ] Build chat workspace with streaming-ready message model.
-- [ ] Build clickable citations that navigate to source pages.
+- [ ] Build clickable citations that navigate to source pages (requires a PDF viewer).
 - [ ] Add upload progress, ingestion status, retry, and clear error states.
 - [ ] Add settings for model, storage, privacy, and diagnostics.
 - [ ] Add keyboard navigation, screen-reader labels, and contrast checks.
