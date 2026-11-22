@@ -37,10 +37,11 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
       return;
     }
 
-    // 500 MB limit configured on backend
-    const limitBytes = 500 * 1024 * 1024;
+    // The server publishes its configured limit through /status.
+    const maxFileSizeMb = Number(pdfStatus?.max_file_size_mb) || 500;
+    const limitBytes = maxFileSizeMb * 1024 * 1024;
     if (file.size > limitBytes) {
-      setErrorMsg('File size exceeds the 500MB limit.');
+      setErrorMsg(`File size exceeds the ${maxFileSizeMb}MB limit.`);
       setUploadState('error');
       return;
     }
@@ -180,7 +181,7 @@ export default function FileUpload({ pdfStatus, setPdfStatus, onUploadSuccess })
               </div>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>Drag & Drop PDF Here</h3>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-                or click to browse files (limit 500MB)
+                or click to browse files (limit {Number(pdfStatus?.max_file_size_mb) || 500}MB)
               </p>
               <div style={{
                 fontSize: '0.75rem',
