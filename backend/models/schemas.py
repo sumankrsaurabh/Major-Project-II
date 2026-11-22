@@ -72,6 +72,7 @@ class StatusResponse(BaseModel):
 
 class ClearConversationRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=64, pattern=SESSION_ID_PATTERN, description="Opaque session identifier")
+    workspace_id: str = Field("default", min_length=1, max_length=64, pattern=SESSION_ID_PATTERN)
 
 
 class ClearConversationResponse(BaseModel):
