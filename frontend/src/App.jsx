@@ -23,6 +23,7 @@ function App() {
     }
     return id
   })
+  const [sessionId] = useState(() => window.crypto.randomUUID())
   const [activeTab, setActiveTab] = useState('upload')
   const [pdfStatus, setPdfStatus] = useState(initialStatus)
   const [chatQuery, setChatQuery] = useState('')
@@ -79,7 +80,7 @@ function App() {
     setIsChatLoading(true)
 
     try {
-      const response = await chatService.askQuestion(text, workspaceId, workspaceId)
+      const response = await chatService.askQuestion(text, sessionId, workspaceId)
       const answerText = response?.answer || response?.message || response?.data || 'No answer available.'
       const assistantMessage = {
         id: `ai-${Date.now()}`,
