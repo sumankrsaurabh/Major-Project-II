@@ -25,7 +25,7 @@ function App() {
     const loadStatus = async () => {
       try {
         const response = await pdfService.getStatus()
-        if (response && response.status === 'success') {
+        if (response && response.server_status) {
           setPdfStatus((prev) => ({
             ...prev,
             ...response,
