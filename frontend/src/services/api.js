@@ -114,9 +114,10 @@ class ChatService extends BaseApiService {
     });
   }
 
-  async clearConversation(sessionId) {
+  async clearConversation(sessionId, workspaceId = 'default') {
     return this.request('POST', '/api/v1/conversations/clear', {
       session_id: sessionId,
+      workspace_id: workspaceId,
     });
   }
 }
