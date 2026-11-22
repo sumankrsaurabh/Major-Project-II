@@ -137,7 +137,7 @@ class POSTagger:
             tagged = []
             for token in tokens:
                 if token.endswith(("ing", "ed")):
-                    tag = "VERB"
+                    tag = "VBG"
                 elif token.isdigit():
                     tag = "CD"
                 elif token.endswith(("ous", "ful", "ive", "able")):
@@ -198,6 +198,7 @@ class NamedEntityRecognizer:
                     entities[entity_type].append(entity_text)
         except LookupError:
             # Pattern-based entities above remain available without NLTK corpora.
+            pass
         
         # Remove duplicates
         return {k: list(set(v)) for k, v in entities.items()}
