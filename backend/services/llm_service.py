@@ -15,6 +15,7 @@ class NativeResponse:
         return self.content
 
 class ImprovedLLM:
+    provider = "extractive"
     """
     Improved local LLM using advanced NLP techniques.
     Generates more accurate and coherent answers through better extraction and synthesis.
@@ -154,6 +155,7 @@ class ImprovedLLM:
 
 
 class OllamaLLM:
+    provider = "ollama"
     """Local generative model adapter using the Ollama chat HTTP API."""
 
     def __init__(self, model_name: str, base_url: str, timeout: float = 120.0, temperature: float = 0.2):
