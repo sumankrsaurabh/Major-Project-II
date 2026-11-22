@@ -199,8 +199,7 @@ def create_vector_store(
     path = _workspace_path(workspace_id)
     document_id = validate_document_id(document_id)
     with _store_lock, _workspace_write_transaction(workspace_id):
-        # Reload under the cross-process lock. A process-local cache could
-        # otherwise overwrite changes committed by another worker.
+        # Reload under the cross-process lock so this write starts from the latest archive.
         store = CustomVectorStore.load_local(str(path), get_embedding_model())
         if store is None:
             store = CustomVectorStore(get_embedding_model())
