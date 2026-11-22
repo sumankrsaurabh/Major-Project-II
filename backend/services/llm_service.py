@@ -15,11 +15,10 @@ class NativeResponse:
         return self.content
 
 class ImprovedLLM:
+    """
+    Extractive sentence-ranking engine. This is not a generative language model.
+    """
     provider = "extractive"
-    """
-    Improved local LLM using advanced NLP techniques.
-    Generates more accurate and coherent answers through better extraction and synthesis.
-    """
     def __init__(self, model_name: str = "improved-local-v2", temperature: float = 0.7):
         self.model_name = model_name
         self.temperature = temperature
