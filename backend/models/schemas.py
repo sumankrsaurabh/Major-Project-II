@@ -29,6 +29,8 @@ class UploadProgress(BaseModel):
 
 class UploadResponse(BaseModel):
     message: str
+    document_id: str
+    workspace_id: str
     filename: str
     chunks: int
     file_size_mb: float
