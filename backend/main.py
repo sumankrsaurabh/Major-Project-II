@@ -20,7 +20,7 @@ from core.vector_store import (
     create_vector_store, delete_workspace_document, list_workspace_documents,
     load_vector_store, validate_document_id, validate_workspace_id,
 )
-from models.schemas import ClearConversationRequest, QueryRequest, UploadResponse
+from models.schemas import (\n    ChatResponse, ClearConversationRequest, DeleteDocumentResponse, HealthResponse,\n    QueryRequest, StatusResponse, UploadResponse,\n)
 from routes.analysis_routes import router as analysis_router
 from services.embedding_service import get_embedding_model
 from services.llm_service import get_llm
@@ -79,7 +79,7 @@ app.include_router(analysis_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api/v1")
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 async def health():
     return {
         "status": "ok",
@@ -156,7 +156,7 @@ async def upload(file: UploadFile = File(...), workspace_id: str = Form("default
         temp_path.unlink(missing_ok=True)
 
 
-@app.delete("/workspaces/{workspace_id}/documents/{document_id}")
+@app.delete("/workspaces/{workspace_id}/documents/{document_id}", response_model=DeleteDocumentResponse)
 async def delete_document(workspace_id: str, document_id: str):
     try:
         workspace_id = validate_workspace_id(workspace_id)
@@ -174,7 +174,7 @@ async def delete_document(workspace_id: str, document_id: str):
     }
 
 
-@app.post("/chat")
+@app.post("/chat", response_model=ChatResponse)
 async def chat(req: QueryRequest):
     if not app_state["models_loaded"]:
         raise HTTPException(status_code=503, detail="AI services are not ready")
@@ -203,7 +203,7 @@ async def clear_conversation_endpoint(req: ClearConversationRequest):
         raise HTTPException(status_code=500, detail="Unable to clear conversation")
 
 
-@app.get("/status")
+@app.get("/status", response_model=StatusResponse)
 async def status(workspace_id: str = Query("default", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")):
     try:
         workspace_id = validate_workspace_id(workspace_id)
@@ -228,12 +228,12 @@ async def status_v1(workspace_id: str):
     return await status(workspace_id)
 
 
-app.add_api_route("/api/v1/health", health, methods=["GET"], tags=["API v1"])
+app.add_api_route("/api/v1/health", health, methods=["GET"], response_model=HealthResponse, tags=["API v1"])
 app.add_api_route("/api/v1/documents/upload", upload, methods=["POST"], response_model=UploadResponse, tags=["API v1"])
-app.add_api_route("/api/v1/workspaces/{workspace_id}/documents/{document_id}", delete_document, methods=["DELETE"], tags=["API v1"])
-app.add_api_route("/api/v1/chat", chat, methods=["POST"], tags=["API v1"])
+app.add_api_route("/api/v1/workspaces/{workspace_id}/documents/{document_id}", delete_document, methods=["DELETE"], response_model=DeleteDocumentResponse, tags=["API v1"])
+app.add_api_route("/api/v1/chat", chat, methods=["POST"], response_model=ChatResponse, tags=["API v1"])
 app.add_api_route("/api/v1/conversations/clear", clear_conversation_endpoint, methods=["POST"], tags=["API v1"])
-app.add_api_route("/api/v1/workspaces/{workspace_id}/status", status_v1, methods=["GET"], tags=["API v1"])
+app.add_api_route("/api/v1/workspaces/{workspace_id}/status", status_v1, methods=["GET"], response_model=StatusResponse, tags=["API v1"])
 
 
 if __name__ == "__main__":
