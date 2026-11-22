@@ -11,21 +11,26 @@ from services.embedding_service import get_embedding_model
 
 
 WORKSPACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+DOCUMENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _store_cache = {}
 _store_lock = threading.RLock()
 
 
 def validate_workspace_id(workspace_id: str) -> str:
-    """Validate an opaque workspace key before using it in a storage path."""
     if not isinstance(workspace_id, str) or not WORKSPACE_ID_PATTERN.fullmatch(workspace_id):
         raise ValueError("Invalid workspace identifier")
     return workspace_id
 
 
+def validate_document_id(document_id: str) -> str:
+    if not isinstance(document_id, str) or not DOCUMENT_ID_PATTERN.fullmatch(document_id):
+        raise ValueError("Invalid document identifier")
+    return document_id
+
+
 def _workspace_path(workspace_id: str) -> Path:
     workspace_id = validate_workspace_id(workspace_id)
     base = Path(VECTOR_PATH).resolve()
-    # Preserve the historical index location for the compatibility workspace.
     target = base if workspace_id == "default" else base / "workspaces" / workspace_id
     resolved = target.resolve()
     if resolved != base and base not in resolved.parents:
@@ -42,7 +47,7 @@ class NativeDocument:
 
 
 class CustomVectorStore:
-    """NumPy cosine-similarity index scoped to a single workspace."""
+    """Workspace-scoped NumPy index persisted as one atomic archive."""
 
     def __init__(self, embedding_model):
         self.embedding_model = embedding_model
@@ -72,66 +77,139 @@ class CustomVectorStore:
             raise ValueError("Query embedding dimensions do not match the workspace index")
         similarities = np.dot(self.vectors, query_vector)
         top_indices = np.argsort(similarities)[::-1][:k]
-        results = []
-        for index in top_indices:
-            doc = self.documents[int(index)]
-            # Copy metadata so concurrent searches cannot overwrite each other's score.
-            metadata = dict(doc.metadata)
-            metadata["score"] = float(similarities[index])
-            results.append(NativeDocument(doc.page_content, metadata))
-        return results
+        return [
+            NativeDocument(
+                self.documents[int(index)].page_content,
+                {**self.documents[int(index)].metadata, "score": float(similarities[index])},
+            )
+            for index in top_indices
+        ]
 
     def save_local(self, folder_path: str):
         path = Path(folder_path)
         path.mkdir(parents=True, exist_ok=True)
-        docs_data = [
-            {"page_content": doc.page_content, "metadata": doc.metadata}
-            for doc in self.documents
-        ]
-        vectors_tmp = path / "vectors.tmp.npy"
-        docs_tmp = path / "documents.tmp.json"
-        if self.vectors is not None:
-            np.save(vectors_tmp, self.vectors)
-        with docs_tmp.open("w", encoding="utf-8") as output:
-            json.dump(docs_data, output, ensure_ascii=False)
-        if self.vectors is not None:
-            os.replace(vectors_tmp, path / "vectors.npy")
-        os.replace(docs_tmp, path / "documents.json")
+        archive = path / "index.npz"
+        temporary = path / f".index-{os.getpid()}-{threading.get_ident()}.tmp"
+        docs_json = json.dumps(
+            [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in self.documents],
+            ensure_ascii=False,
+        )
+        # A single archive means vectors and their document metadata are swapped together.
+        with temporary.open("wb") as output:
+            np.savez_compressed(
+                output,
+                vectors=self.vectors if self.vectors is not None else np.empty((0, 0), dtype=np.float32),
+                documents=np.asarray(docs_json),
+                format_version=np.asarray(1, dtype=np.int64),
+            )
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, archive)
 
     @classmethod
     def load_local(cls, folder_path: str, embedding_model):
         path = Path(folder_path)
-        vec_file = path / "vectors.npy"
-        doc_file = path / "documents.json"
-        if not vec_file.is_file() or not doc_file.is_file():
-            return None
-        store = cls(embedding_model)
-        store.vectors = np.load(vec_file, allow_pickle=False)
-        with doc_file.open("r", encoding="utf-8") as source:
-            docs_data = json.load(source)
-        store.documents = [
-            NativeDocument(page_content=item["page_content"], metadata=item.get("metadata", {}))
-            for item in docs_data
-        ]
-        if store.vectors.ndim != 2 or store.vectors.shape[0] != len(store.documents):
+        archive = path / "index.npz"
+        if archive.is_file():
+            with np.load(archive, allow_pickle=False) as data:
+                vectors = data["vectors"]
+                docs_data = json.loads(str(data["documents"].item()))
+            store = cls(embedding_model)
+            store.vectors = vectors if vectors.size else None
+            store.documents = [
+                NativeDocument(item["page_content"], item.get("metadata", {}))
+                for item in docs_data
+            ]
+        else:
+            # Read the earlier two-file format for a non-disruptive upgrade.
+            vec_file, doc_file = path / "vectors.npy", path / "documents.json"
+            if not vec_file.is_file() or not doc_file.is_file():
+                return None
+            store = cls(embedding_model)
+            store.vectors = np.load(vec_file, allow_pickle=False)
+            with doc_file.open("r", encoding="utf-8") as source:
+                docs_data = json.load(source)
+            store.documents = [
+                NativeDocument(item["page_content"], item.get("metadata", {}))
+                for item in docs_data
+            ]
+        if store.vectors is None or store.vectors.ndim != 2 or store.vectors.shape[0] != len(store.documents):
             raise ValueError("Workspace vector index is corrupt or inconsistent")
         return store
 
 
-def create_vector_store(chunks: list[str], workspace_id: str = "default"):
-    """Create or append chunks to the selected workspace index."""
+def create_vector_store(
+    chunks: list[str],
+    workspace_id: str = "default",
+    document_id: str = "legacy",
+    filename: str = "Imported document",
+):
+    """Append a document's chunks to the selected workspace index."""
     path = _workspace_path(workspace_id)
+    document_id = validate_document_id(document_id)
     with _store_lock:
         store = _store_cache.get(workspace_id)
         if store is None:
             store = CustomVectorStore.load_local(str(path), get_embedding_model())
         if store is None:
             store = CustomVectorStore(get_embedding_model())
-        documents = [NativeDocument(page_content=chunk) for chunk in chunks if chunk.strip()]
+        documents = [
+            NativeDocument(
+                page_content=chunk,
+                metadata={"document_id": document_id, "filename": filename, "chunk_index": index},
+            )
+            for index, chunk in enumerate(chunks) if chunk.strip()
+        ]
         store.add_documents(documents)
         store.save_local(str(path))
         _store_cache[workspace_id] = store
         return store
+
+
+def list_workspace_documents(workspace_id: str = "default"):
+    store = load_vector_store(workspace_id)
+    if store is None:
+        return []
+    documents = {}
+    for chunk in store.documents:
+        doc_id = chunk.metadata.get("document_id", "legacy")
+        record = documents.setdefault(doc_id, {
+            "document_id": doc_id,
+            "filename": chunk.metadata.get("filename", "Imported document"),
+            "chunks": 0,
+        })
+        record["chunks"] += 1
+    return list(documents.values())
+
+
+def delete_workspace_document(workspace_id: str, document_id: str):
+    """Remove a document and its vectors from one workspace."""
+    path = _workspace_path(workspace_id)
+    document_id = validate_document_id(document_id)
+    with _store_lock:
+        store = _store_cache.get(workspace_id)
+        if store is None:
+            store = CustomVectorStore.load_local(str(path), get_embedding_model())
+        if store is None:
+            return False
+        keep = [
+            index for index, doc in enumerate(store.documents)
+            if doc.metadata.get("document_id", "legacy") != document_id
+        ]
+        if len(keep) == len(store.documents):
+            return False
+        store.documents = [store.documents[index] for index in keep]
+        store.vectors = store.vectors[keep] if keep else None
+        if store.documents:
+            store.save_local(str(path))
+            _store_cache[workspace_id] = store
+        else:
+            (path / "index.npz").unlink(missing_ok=True)
+            # Remove legacy files only after the workspace has no indexed content.
+            (path / "vectors.npy").unlink(missing_ok=True)
+            (path / "documents.json").unlink(missing_ok=True)
+            _store_cache.pop(workspace_id, None)
+        return True
 
 
 def load_vector_store(workspace_id: str = "default"):
@@ -147,6 +225,5 @@ def load_vector_store(workspace_id: str = "default"):
 
 
 def clear_vector_store_cache():
-    """Clear in-memory indexes; primarily useful for tests and controlled reloads."""
     with _store_lock:
         _store_cache.clear()
