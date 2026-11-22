@@ -11,11 +11,10 @@ import numpy as np
 from nltk.corpus import wordnet
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk import pos_tag, ne_chunk
-import nltk
 
 logger = logging.getLogger(__name__)
 
-# NLTK corpora are optional runtime assets. Never download them during import.\n
+# NLTK corpora are optional runtime assets. Never download them during import.
 
 class AdvancedTokenizer:
     """Advanced tokenization with multiple strategies"""
@@ -30,7 +29,7 @@ class AdvancedTokenizer:
         try:
             sentences = sent_tokenize(text)
         except LookupError:
-            sentences = re.split(r'(?<=[.!?])\\s+|\\n+', text)
+            sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
         return [s.strip() for s in sentences if s.strip()]
     
     def tokenize_words(self, text: str) -> List[str]:
@@ -176,7 +175,7 @@ class NamedEntityRecognizer:
         try:
             return word_tokenize(text)
         except LookupError:
-            return re.findall(r'\\b\\w+\\b', text)
+            return re.findall(r'\b\w+\b', text)
 
     def recognize_entities(self, text: str) -> Dict[str, List[str]]:
         """Recognize named entities using patterns and NLTK"""
