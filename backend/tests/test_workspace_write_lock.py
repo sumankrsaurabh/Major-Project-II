@@ -1,4 +1,5 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import multiprocessing
 import sqlite3
 import threading
 import time
@@ -51,3 +52,31 @@ def test_workspace_write_transaction_rolls_back_and_releases_lock(tmp_path, monk
 
     with vector_store._workspace_write_transaction("workspace-a"):
         assert True
+
+
+
+def _increment_counter_in_process(args):
+    root_path, counter_path = args
+    import core.vector_store as process_vector_store
+
+    process_vector_store.VECTOR_PATH = root_path
+    with process_vector_store._workspace_write_transaction("workspace-process"):
+        with sqlite3.connect(counter_path, timeout=10) as connection:
+            value = connection.execute("SELECT value FROM counter").fetchone()[0]
+            connection.execute("UPDATE counter SET value = ?", (value + 1,))
+    return True
+
+
+def test_workspace_write_transaction_serializes_separate_processes(tmp_path):
+    counter_db = tmp_path / "process-counter.sqlite3"
+    with sqlite3.connect(counter_db) as connection:
+        connection.execute("CREATE TABLE counter (value INTEGER NOT NULL)")
+        connection.execute("INSERT INTO counter VALUES (0)")
+
+    context = multiprocessing.get_context("spawn")
+    args = [(str(tmp_path), str(counter_db)) for _ in range(12)]
+    with ProcessPoolExecutor(max_workers=4, mp_context=context) as executor:
+        assert all(executor.map(_increment_counter_in_process, args))
+
+    with sqlite3.connect(counter_db) as connection:
+        assert connection.execute("SELECT value FROM counter").fetchone()[0] == 12
