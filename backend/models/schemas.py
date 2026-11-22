@@ -77,3 +77,13 @@ class ClearConversationRequest(BaseModel):
 class ClearConversationResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+    request_id: str
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
